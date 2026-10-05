@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ovos-openclaw-skill"
+version = "0.1.0"
+description = "An explicit-invocation OVOS voice bridge to a local OpenClaw Gateway"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{name = "Collins Chikeluba"}]
+dependencies = ["ovos-workshop>=9.8.0a1,<10"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<10", "build>=1"]
+
+[project.entry-points."opm.skill"]
+ovos-openclaw-skill = "ovos_openclaw_skill:OpenClawSkill"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+ovos_openclaw_skill = ["locale/**/*.intent"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
