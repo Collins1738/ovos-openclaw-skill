@@ -1,4 +1,9 @@
 ask Dravon {query}
 tell Dravon {query}
 Dravon {query}
-
+ask Draven {query}
+tell Draven {query}
+Draven {query}
+ask Dravan {query}
+tell Dravan {query}
+Dravan {query}

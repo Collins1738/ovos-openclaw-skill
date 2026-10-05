@@ -38,6 +38,8 @@ def test_explicit_phrases_match_and_extract_query():
         "ask Dravon what time is it": "what time is it",
         "tell Dravon make a note": "make a note",
         "Dravon hello there": "hello there",
+        "ask Draven what time is it": "what time is it",
+        "tell Dravan make a note": "make a note",
     }
     for utterance, expected_query in examples.items():
         match = matcher.calc_intent(utterance)
