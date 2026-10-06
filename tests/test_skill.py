@@ -154,7 +154,7 @@ def test_follow_up_mode_enforces_turn_limit(monkeypatch):
     ]
 
 
-def test_follow_up_mode_caps_requested_limit_at_ten():
+def test_follow_up_mode_caps_requested_limit_at_twenty_five():
     skill = bare_skill()
     skill._settings.update(
         {"follow_up_enabled": True, "follow_up_max_turns": 99}
@@ -165,8 +165,8 @@ def test_follow_up_mode_caps_requested_limit_at_ten():
 
     skill._conversation("initial", message)
 
-    assert skill._answer.call_count == 11
-    assert skill.get_response.call_count == 10
+    assert skill._answer.call_count == 26
+    assert skill.get_response.call_count == 25
 
 
 def test_direct_fallback_only_advertises_nonempty_utterances():

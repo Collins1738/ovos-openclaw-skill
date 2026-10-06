@@ -18,7 +18,7 @@ DEFAULT_MODEL = "openclaw/default"
 DEFAULT_CONVERSATION = "ovos-openclaw-skill"
 DEFAULT_TIMEOUT = 60.0
 DEFAULT_MAX_TOKENS = 180
-DEFAULT_MAX_FOLLOW_UPS = 10
+DEFAULT_MAX_FOLLOW_UPS = 25
 DEFAULT_SPEECH_WAIT_TIMEOUT = 60
 
 
@@ -71,7 +71,7 @@ class OpenClawSkill(FallbackSkill):
             getattr(self, "settings", {}).get("follow_up_enabled", True)
         )
         max_follow_ups = self._bounded_int(
-            "follow_up_max_turns", DEFAULT_MAX_FOLLOW_UPS, 0, 10
+            "follow_up_max_turns", DEFAULT_MAX_FOLLOW_UPS, 0, 25
         )
 
         for turn in range(max_follow_ups + 1):

@@ -77,7 +77,7 @@ Non-secret skill settings are optional:
 | --- | --- | --- |
 | `direct_route` | `true` | Consume every post-wake utterance through OpenClaw |
 | `follow_up_enabled` | `true` | Open the microphone after successful answers |
-| `follow_up_max_turns` | `10` | Maximum no-wake follow-ups, bounded 0–10 |
+| `follow_up_max_turns` | `25` | Maximum no-wake follow-ups, bounded 0–25 |
 | `follow_up_speech_timeout` | `60` | Maximum wait for TTS to finish, bounded 5–120 seconds |
 | `gateway_url` | `http://127.0.0.1:18789` | Gateway base URL |
 | `model` | `openclaw/default` | OpenAI-compatible model name |
