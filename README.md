@@ -9,6 +9,7 @@ Gateway. It targets `ovos-workshop` 9.8.x and `ovos-core` 3.7.x.
 wake word -> local STT -> high-priority OpenClaw fallback -> OVOS skill
           -> token lookup -> HTTP POST /v1/chat/completions
           -> local OpenClaw Gateway -> short spoken response
+          -> listening cue -> bounded no-wake follow-up turns
 ```
 
 The OpenAI-compatible request uses model `openclaw/default`, a concise
@@ -22,10 +23,24 @@ second skill answers alongside OpenClaw. Stop/cancel remains local when the OVOS
 stop pipeline stays first. Explicit phrases such as `ask Dravon ...` continue
 to work as a compatibility path.
 
-To make direct routing take precedence over native skills, preserve the current
-`intents.pipeline` list in `mycroft.conf` but move
-`ovos-fallback-pipeline-plugin-high` immediately after
-`ovos-stop-pipeline-plugin-high`. Leave every other entry in its existing order.
+To make direct routing and follow-ups deterministic, preserve the current
+`intents.pipeline` list in `mycroft.conf` but place these entries first:
+
+```text
+ovos-stop-pipeline-plugin-high
+ovos-converse-pipeline-plugin
+ovos-fallback-pipeline-plugin-high
+```
+
+Stop/cancel remains local, response mode captures an armed follow-up, and all
+other normal utterances then reach the OpenClaw fallback. Leave every remaining
+pipeline entry in its existing order.
+
+Follow-up mode is also enabled by default. After each successful response, the
+skill waits for TTS to finish and asks OVOS response mode to open the microphone.
+The normal `start_listening` cue plays when `confirm_listening` is enabled. A
+blank or timed-out capture closes the conversation silently. The turn limit
+prevents an accidental endless listening loop.
 
 ## Security boundary
 
@@ -61,6 +76,9 @@ Non-secret skill settings are optional:
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `direct_route` | `true` | Consume every post-wake utterance through OpenClaw |
+| `follow_up_enabled` | `true` | Open the microphone after successful answers |
+| `follow_up_max_turns` | `10` | Maximum no-wake follow-ups, bounded 0–10 |
+| `follow_up_speech_timeout` | `60` | Maximum wait for TTS to finish, bounded 5–120 seconds |
 | `gateway_url` | `http://127.0.0.1:18789` | Gateway base URL |
 | `model` | `openclaw/default` | OpenAI-compatible model name |
 | `conversation` | `ovos-openclaw-skill` | Stable OpenAI `user` ID |
