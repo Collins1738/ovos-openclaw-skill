@@ -7,19 +7,19 @@ import subprocess
 import sys
 
 
-ENVIRONMENT_VARIABLE = "OPENCLAW_GATEWAY_TOKEN"
+GATEWAY_ENVIRONMENT_VARIABLE = "OPENCLAW_GATEWAY_TOKEN"
+PROACTIVE_SPEECH_ENVIRONMENT_VARIABLE = "OVOS_OPENCLAW_SPEECH_SECRET"
 KEYCHAIN_SERVICE = "ovos-openclaw-skill"
-KEYCHAIN_ACCOUNT = "gateway-token"
+GATEWAY_KEYCHAIN_ACCOUNT = "gateway-token"
+PROACTIVE_SPEECH_KEYCHAIN_ACCOUNT = "proactive-speech-key"
 
 
-def get_gateway_token() -> str | None:
-    """Return the token from the environment, then macOS Keychain."""
-    token = os.environ.get(ENVIRONMENT_VARIABLE, "").strip()
-    if token:
-        return token
+def _get_credential(environment_variable: str, keychain_account: str) -> str | None:
+    value = os.environ.get(environment_variable, "").strip()
+    if value:
+        return value
     if sys.platform != "darwin":
         return None
-
     try:
         result = subprocess.run(
             [
@@ -28,7 +28,7 @@ def get_gateway_token() -> str | None:
                 "-s",
                 KEYCHAIN_SERVICE,
                 "-a",
-                KEYCHAIN_ACCOUNT,
+                keychain_account,
                 "-w",
             ],
             check=True,
@@ -39,4 +39,19 @@ def get_gateway_token() -> str | None:
     except (FileNotFoundError, subprocess.SubprocessError):
         return None
     return result.stdout.strip() or None
+
+
+def get_gateway_token() -> str | None:
+    """Return the Gateway token from the environment, then macOS Keychain."""
+    return _get_credential(
+        GATEWAY_ENVIRONMENT_VARIABLE, GATEWAY_KEYCHAIN_ACCOUNT
+    )
+
+
+def get_proactive_speech_secret() -> str | None:
+    """Return the independent proactive-speech HMAC secret."""
+    return _get_credential(
+        PROACTIVE_SPEECH_ENVIRONMENT_VARIABLE,
+        PROACTIVE_SPEECH_KEYCHAIN_ACCOUNT,
+    )
 

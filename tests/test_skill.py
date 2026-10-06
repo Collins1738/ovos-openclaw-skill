@@ -187,6 +187,49 @@ def test_direct_fallback_can_be_disabled():
     skill.speak.assert_not_called()
 
 
+def test_proactive_speech_never_opens_follow_up_listening():
+    skill = bare_skill()
+
+    skill._speak_proactively("Reminder: hydrate.", "en-us")
+
+    skill.speak.assert_called_once_with(
+        "Reminder: hydrate.",
+        expect_response=False,
+        wait=45,
+        meta={"proactive": True, "requested_lang": "en-us"},
+    )
+
+
+def test_proactive_response_and_result_never_echo_spoken_text():
+    skill = bare_skill()
+    skill.skill_id = "ovos-openclaw-skill"
+    skill._bus = Mock()
+    skill._proactive_speech = Mock()
+    skill._proactive_speech.submit.return_value = {
+        "v": 1,
+        "request_id": "abc",
+        "status": "accepted",
+        "reason": None,
+        "queue_depth": 1,
+    }
+    message = Mock()
+    message.data = {"text": "private reminder"}
+    message.response.return_value = "response-message"
+
+    skill._handle_proactive_speech(message)
+    skill._emit_proactive_result({
+        "v": 1,
+        "request_id": "abc",
+        "status": "spoken",
+        "finished_at": 1,
+    })
+
+    assert skill.bus.emit.call_args_list[0].args[0] == "response-message"
+    result_message = skill.bus.emit.call_args_list[1].args[0]
+    assert "text" not in result_message.data
+    assert result_message.msg_type.endswith("proactive_speech.result")
+
+
 def test_skill_registers_intent_and_high_priority_fallback():
     assert issubclass(OpenClawSkill, FallbackSkill)
     assert "dravon.intent" in OpenClawSkill.handle_dravon.intents

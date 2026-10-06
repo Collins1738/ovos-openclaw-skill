@@ -10,7 +10,11 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 authors = [{name = "Collins Chikeluba"}]
-dependencies = ["ovos-workshop>=9.8.0a1,<10"]
+dependencies = [
+  "ovos-workshop>=9.8.0a1,<10",
+  "ovos-bus-client>=2.11.0a1,<3",
+  "ovos-config>=3.6.0a1,<4",
+]
 classifiers = [
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
@@ -21,6 +25,9 @@ test = ["pytest>=8,<10", "build>=1"]
 
 [project.entry-points."opm.skill"]
 ovos-openclaw-skill = "ovos_openclaw_skill:OpenClawSkill"
+
+[project.scripts]
+ovos-openclaw-speak = "ovos_openclaw_skill.proactive:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

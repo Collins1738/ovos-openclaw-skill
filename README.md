@@ -10,6 +10,9 @@ wake word -> local STT -> high-priority OpenClaw fallback -> OVOS skill
           -> token lookup -> HTTP POST /v1/chat/completions
           -> local OpenClaw Gateway -> short spoken response
           -> listening cue -> bounded no-wake follow-up turns
+
+OpenClaw automation -> signed local OVOS bus request -> bounded FIFO queue
+                    -> Piper announcement, never follow-up listening
 ```
 
 The OpenAI-compatible request uses model `openclaw/default`, a concise
@@ -41,6 +44,49 @@ skill waits for TTS to finish and asks OVOS response mode to open the microphone
 The normal `start_listening` cue plays when `confirm_listening` is enabled. A
 blank or timed-out capture closes the conversation silently. The turn limit
 prevents an accidental endless listening loop.
+
+## Proactive speech
+
+The package installs `ovos-openclaw-speak`, an authenticated local producer for
+reminders and alerts. It sends a short-lived HMAC-signed request over the
+loopback-only OVOS message bus. The skill verifies the signature, rejects
+replays, applies quiet hours and rate limits, queues at most five announcements,
+and speaks them one at a time with `expect_response=false`.
+
+Limits are intentionally conservative: 400 characters, 70 words, three accepted
+requests per minute, twelve per hour, and quiet hours from 23:00 through 08:00
+local time by default. Pending announcements are discarded on skill reload and
+never persisted as stale speech.
+
+Use an independent random HMAC key. This command generates it inside the process
+and stores it directly in macOS Keychain without printing it:
+
+```bash
+python3 - <<'PY'
+import secrets
+import subprocess
+
+subprocess.run([
+    "security", "add-generic-password", "-U",
+    "-s", "ovos-openclaw-skill",
+    "-a", "proactive-speech-key",
+    "-w", secrets.token_urlsafe(32),
+], check=True)
+PY
+```
+
+Manual test, with message text read from standard input instead of process argv:
+
+```bash
+printf '%s' 'Reminder: stand up and stretch.' |
+  ~/.venvs/ovos/bin/ovos-openclaw-speak --stdin
+```
+
+For an OpenClaw reminder, use an automation `command` payload with fixed argv
+`["/Users/collinsc/.venvs/ovos/bin/ovos-openclaw-speak", "--stdin"]`, put the
+approved reminder text in the payload's `input`, set delivery to `none`, and use
+a bounded timeout. A successful command waits for the correlated `spoken`
+result, rather than treating message-bus acceptance as audible completion.
 
 ## Security boundary
 
@@ -79,6 +125,8 @@ Non-secret skill settings are optional:
 | `follow_up_enabled` | `true` | Open the microphone after successful answers |
 | `follow_up_max_turns` | `25` | Maximum no-wake follow-ups, bounded 0–25 |
 | `follow_up_speech_timeout` | `60` | Maximum wait for TTS to finish, bounded 5–120 seconds |
+| `proactive_quiet_start` | `23:00` | Local quiet-hours start in 24-hour time |
+| `proactive_quiet_end` | `08:00` | Local quiet-hours end in 24-hour time |
 | `gateway_url` | `http://127.0.0.1:18789` | Gateway base URL |
 | `model` | `openclaw/default` | OpenAI-compatible model name |
 | `conversation` | `ovos-openclaw-skill` | Stable OpenAI `user` ID |

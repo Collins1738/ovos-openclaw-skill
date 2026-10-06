@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ovos_bus_client import Message
 from ovos_utils import classproperty
 from ovos_utils.process_utils import RuntimeRequirements
 from ovos_workshop.decorators import fallback_handler, intent_handler
@@ -11,6 +12,7 @@ from ovos_workshop.skills.fallback import FallbackSkill
 
 from .client import OpenClawClient, OpenClawError
 from .credentials import get_gateway_token
+from .proactive import ProactiveSpeechManager, REQUEST_TOPIC, RESULT_TOPIC
 
 
 DEFAULT_GATEWAY_URL = "http://127.0.0.1:18789"
@@ -37,6 +39,51 @@ class OpenClawSkill(FallbackSkill):
             no_internet_fallback=True,
             no_network_fallback=True,
             no_gui_fallback=True,
+        )
+
+    def initialize(self) -> None:
+        """Start the authenticated proactive-speech queue."""
+        settings = getattr(self, "settings", {})
+        self._proactive_speech = ProactiveSpeechManager(
+            speak=self._speak_proactively,
+            result=self._emit_proactive_result,
+            quiet_start=str(settings.get("proactive_quiet_start", "23:00")),
+            quiet_end=str(settings.get("proactive_quiet_end", "08:00")),
+        )
+        self._proactive_speech.start()
+        self.add_event(
+            REQUEST_TOPIC,
+            self._handle_proactive_speech,
+            speak_errors=False,
+        )
+
+    def shutdown(self) -> None:
+        """Stop accepting announcements and drain no stale speech on reload."""
+        manager = getattr(self, "_proactive_speech", None)
+        if manager:
+            manager.stop()
+
+    def _handle_proactive_speech(self, message: Message) -> None:
+        response = self._proactive_speech.submit(message.data)
+        self.bus.emit(message.response(response))
+
+    def _speak_proactively(self, text: str, lang: str) -> None:
+        # The skill locale owns TTS language. The signed language field keeps
+        # the protocol explicit and leaves room for multilingual support later.
+        self.speak(
+            text,
+            expect_response=False,
+            wait=45,
+            meta={"proactive": True, "requested_lang": lang},
+        )
+
+    def _emit_proactive_result(self, result: dict[str, Any]) -> None:
+        self.bus.emit(
+            Message(
+                RESULT_TOPIC,
+                result,
+                context={"skill_id": self.skill_id},
+            )
         )
 
     def can_answer(self, message: Any) -> bool:

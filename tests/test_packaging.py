@@ -4,6 +4,7 @@ from importlib.resources import files
 from padacioso import IntentContainer
 
 from ovos_openclaw_skill import OpenClawSkill
+from ovos_openclaw_skill.proactive import main as proactive_speech_main
 
 
 def test_plugin_entry_point_loads_skill_class():
@@ -11,6 +12,13 @@ def test_plugin_entry_point_loads_skill_class():
     matches = tuple(matches)
     assert len(matches) == 1
     assert matches[0].load() is OpenClawSkill
+
+
+def test_proactive_speech_console_entry_point_loads():
+    matches = entry_points(group="console_scripts", name="ovos-openclaw-speak")
+    matches = tuple(matches)
+    assert len(matches) == 1
+    assert matches[0].load() is proactive_speech_main
 
 
 def test_intent_resource_is_packaged():

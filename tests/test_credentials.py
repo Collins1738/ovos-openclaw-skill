@@ -9,6 +9,14 @@ def test_environment_token_has_priority(monkeypatch):
     assert credentials.get_gateway_token() == "from-env"
 
 
+def test_proactive_speech_uses_an_independent_credential(monkeypatch):
+    monkeypatch.setenv("OPENCLAW_GATEWAY_TOKEN", "gateway-secret")
+    monkeypatch.setenv("OVOS_OPENCLAW_SPEECH_SECRET", "speech-secret")
+
+    assert credentials.get_gateway_token() == "gateway-secret"
+    assert credentials.get_proactive_speech_secret() == "speech-secret"
+
+
 def test_macos_keychain_fallback(monkeypatch):
     monkeypatch.delenv("OPENCLAW_GATEWAY_TOKEN", raising=False)
     monkeypatch.setattr(credentials.sys, "platform", "darwin")
