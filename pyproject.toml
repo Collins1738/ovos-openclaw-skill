@@ -37,7 +37,7 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools.package-data]
-ovos_openclaw_skill = ["locale/**/*.intent"]
+ovos_openclaw_skill = ["locale/**/*.intent", "res/snd/*.wav"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

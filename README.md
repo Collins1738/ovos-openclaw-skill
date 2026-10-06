@@ -42,8 +42,9 @@ pipeline entry in its existing order.
 Follow-up mode is also enabled by default. After each successful response, the
 skill waits for TTS to finish and asks OVOS response mode to open the microphone.
 The normal `start_listening` cue plays when `confirm_listening` is enabled. A
-blank or timed-out capture closes the conversation silently. The turn limit
-prevents an accidental endless listening loop.
+short descending cue plays when OVOS finishes recording, so the end of the
+listening window is audible. A blank or timed-out capture then closes the
+conversation. The turn limit prevents an accidental endless listening loop.
 
 ## Proactive speech
 

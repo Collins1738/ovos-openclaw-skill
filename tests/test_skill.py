@@ -3,7 +3,11 @@ from unittest.mock import Mock, call
 
 import pytest
 
-from ovos_openclaw_skill import OpenClawSkill
+from ovos_openclaw_skill import (
+    END_LISTENING_SOUND,
+    PLAY_SOUND_TOPIC,
+    OpenClawSkill,
+)
 from ovos_openclaw_skill.client import OpenClawError
 from ovos_workshop.skills.fallback import FallbackSkill
 
@@ -198,6 +202,22 @@ def test_proactive_speech_opens_follow_up_listening():
         wait=45,
         meta={"proactive": True, "requested_lang": "en-us"},
     )
+
+
+def test_record_end_plays_the_packaged_completion_cue():
+    skill = bare_skill()
+    skill._bus = Mock()
+    message = Mock()
+    forwarded = Mock()
+    message.forward.return_value = forwarded
+
+    skill._handle_record_end(message)
+
+    message.forward.assert_called_once_with(
+        PLAY_SOUND_TOPIC,
+        {"uri": END_LISTENING_SOUND},
+    )
+    skill.bus.emit.assert_called_once_with(forwarded)
 
 
 def test_proactive_response_and_result_never_echo_spoken_text():

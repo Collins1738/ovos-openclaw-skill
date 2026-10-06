@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from ovos_bus_client import Message
@@ -22,6 +23,11 @@ DEFAULT_TIMEOUT = 60.0
 DEFAULT_MAX_TOKENS = 180
 DEFAULT_MAX_FOLLOW_UPS = 25
 DEFAULT_SPEECH_WAIT_TIMEOUT = 60
+RECORD_END_TOPIC = "recognizer_loop:record_end"
+PLAY_SOUND_TOPIC = "mycroft.audio.play_sound"
+END_LISTENING_SOUND = str(
+    Path(__file__).parent / "res" / "snd" / "end_listening.wav"
+)
 
 
 class OpenClawSkill(FallbackSkill):
@@ -56,6 +62,11 @@ class OpenClawSkill(FallbackSkill):
             self._handle_proactive_speech,
             speak_errors=False,
         )
+        self.add_event(
+            RECORD_END_TOPIC,
+            self._handle_record_end,
+            speak_errors=False,
+        )
 
     def shutdown(self) -> None:
         """Stop accepting announcements and drain no stale speech on reload."""
@@ -66,6 +77,15 @@ class OpenClawSkill(FallbackSkill):
     def _handle_proactive_speech(self, message: Message) -> None:
         response = self._proactive_speech.submit(message.data)
         self.bus.emit(message.response(response))
+
+    def _handle_record_end(self, message: Message) -> None:
+        """Play a brief cue when OVOS has finished capturing an utterance."""
+        self.bus.emit(
+            message.forward(
+                PLAY_SOUND_TOPIC,
+                {"uri": END_LISTENING_SOUND},
+            )
+        )
 
     def _speak_proactively(self, text: str, lang: str) -> None:
         # The skill locale owns TTS language. The signed language field keeps

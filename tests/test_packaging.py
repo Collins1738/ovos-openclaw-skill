@@ -21,6 +21,14 @@ def test_proactive_speech_console_entry_point_loads():
     assert matches[0].load() is proactive_speech_main
 
 
+def test_end_listening_sound_is_packaged():
+    sound = files("ovos_openclaw_skill").joinpath(
+        "res/snd/end_listening.wav"
+    )
+    assert sound.is_file()
+    assert sound.read_bytes().startswith(b"RIFF")
+
+
 def test_intent_resource_is_packaged():
     text = (
         files("ovos_openclaw_skill")
