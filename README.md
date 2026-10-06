@@ -86,7 +86,7 @@ such as “which meeting?” retain their meaning. The context is consumed once 
 is also cleared by silence or failed transcription. The exchange then continues
 through the existing stable OpenClaw conversation and bounded follow-up flow.
 
-Limits are intentionally conservative: 400 characters, 70 words, three accepted
+Limits are intentionally conservative: 750 characters, 100 words, three accepted
 requests per minute, and twelve per hour. Announcements are allowed at any local
 time. Pending announcements are discarded on skill reload and never persisted
 as stale speech.

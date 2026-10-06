@@ -9,6 +9,7 @@ import pytest
 from ovos_bus_client import Message
 from ovos_openclaw_skill.proactive import (
     MAX_CHARACTERS,
+    MAX_WORDS,
     ProactiveSpeechError,
     ProactiveSpeechManager,
     RESPONSE_TOPIC,
@@ -146,8 +147,9 @@ def test_text_bounds_and_controls():
         sanitize_text("hello\x00there")
     with pytest.raises(ProactiveSpeechError, match="too_large"):
         sanitize_text("x" * (MAX_CHARACTERS + 1))
+    assert len(sanitize_text("word " * MAX_WORDS).split()) == MAX_WORDS
     with pytest.raises(ProactiveSpeechError, match="too_large"):
-        sanitize_text("word " * 71)
+        sanitize_text("word " * (MAX_WORDS + 1))
 
 
 class FakeBus:
