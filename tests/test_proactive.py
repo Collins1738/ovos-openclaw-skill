@@ -18,6 +18,7 @@ from ovos_openclaw_skill.proactive import (
     make_request,
     sanitize_text,
     send_request,
+    submit_request,
     sign_request,
     verify_signature,
 )
@@ -176,13 +177,23 @@ class FakeBus:
             "v": 1, "request_id": request_id, "status": "accepted",
             "reason": None, "queue_depth": 1,
         }))
-        self.handlers[RESULT_TOPIC](Message(RESULT_TOPIC, {
-            "v": 1, "request_id": request_id, "status": "spoken",
-            "finished_at": NOW,
-        }))
+        if RESULT_TOPIC in self.handlers:
+            self.handlers[RESULT_TOPIC](Message(RESULT_TOPIC, {
+                "v": 1, "request_id": request_id, "status": "spoken",
+                "finished_at": NOW,
+            }))
 
     def close(self):
         self.closed = True
+
+
+def test_submitter_waits_only_for_correlated_admission():
+    bus = FakeBus()
+    data = request()
+    result = submit_request(data, 1, client_factory=lambda: bus)
+    assert result["status"] == "accepted"
+    assert bus.emitted[0].msg_type.endswith("proactive_speech.request")
+    assert bus.closed is True
 
 
 def test_sender_waits_for_correlated_spoken_result():

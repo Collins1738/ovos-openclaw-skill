@@ -314,6 +314,38 @@ class ProactiveSpeechManager:
         })
 
 
+def submit_request(
+    data: dict[str, Any], timeout: float = 10.0,
+    client_factory: Any = MessageBusClient,
+) -> dict[str, Any]:
+    """Send one authenticated request and wait only for queue admission."""
+    client = client_factory()
+    accepted = Event()
+    response: dict[str, Any] = {}
+    request_id = data["request_id"]
+
+    def on_response(message: Message) -> None:
+        if message.data.get("request_id") == request_id:
+            response.update(message.data)
+            accepted.set()
+
+    try:
+        client.on(RESPONSE_TOPIC, on_response)
+        client.run_in_thread()
+        if not client.connected_event.wait(timeout):
+            raise ProactiveSpeechError("could not reach the local OVOS message bus")
+        client.emit(Message(REQUEST_TOPIC, data))
+        if not accepted.wait(timeout):
+            raise ProactiveSpeechError("OVOS did not acknowledge the request")
+        return response
+    finally:
+        try:
+            client.remove(RESPONSE_TOPIC, on_response)
+        except Exception:
+            pass
+        client.close()
+
+
 def send_request(
     data: dict[str, Any], timeout: float, client_factory: Any = MessageBusClient
 ) -> dict[str, Any]:
