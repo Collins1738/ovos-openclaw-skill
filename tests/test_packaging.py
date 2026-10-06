@@ -1,9 +1,11 @@
+import wave
 from importlib.metadata import entry_points
 from importlib.resources import files
 
 from padacioso import IntentContainer
 
 from ovos_openclaw_skill import OpenClawSkill
+from ovos_openclaw_skill.http_ingress import main as speech_http_main
 from ovos_openclaw_skill.proactive import main as proactive_speech_main
 
 
@@ -19,6 +21,22 @@ def test_proactive_speech_console_entry_point_loads():
     matches = tuple(matches)
     assert len(matches) == 1
     assert matches[0].load() is proactive_speech_main
+
+
+def test_speech_http_console_entry_point_loads():
+    matches = entry_points(group="console_scripts", name="ovos-openclaw-http")
+    matches = tuple(matches)
+    assert len(matches) == 1
+    assert matches[0].load() is speech_http_main
+
+
+def test_safe_start_listening_sound_is_packaged_with_guard_silence():
+    sound = files("ovos_openclaw_skill").joinpath(
+        "res/snd/start_listening_safe.wav"
+    )
+    assert sound.is_file()
+    with sound.open("rb") as stream, wave.open(stream, "rb") as audio:
+        assert audio.getnframes() / audio.getframerate() > 1.0
 
 
 def test_end_listening_sound_is_packaged():

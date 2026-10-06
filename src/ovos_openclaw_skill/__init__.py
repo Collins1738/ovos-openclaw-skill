@@ -26,7 +26,7 @@ DEFAULT_MAX_TOKENS = 180
 DEFAULT_MAX_FOLLOW_UPS = 25
 DEFAULT_SPEECH_WAIT_TIMEOUT = 60
 DEFAULT_PROACTIVE_CONTEXT_SECONDS = 30
-RECORD_END_TOPIC = "recognizer_loop:record_end"
+UTTERANCE_TOPIC = "recognizer_loop:utterance"
 UNKNOWN_SPEECH_TOPIC = "recognizer_loop:speech.recognition.unknown"
 PLAY_SOUND_TOPIC = "mycroft.audio.play_sound"
 END_LISTENING_SOUND = str(
@@ -66,13 +66,13 @@ class OpenClawSkill(FallbackSkill):
             speak_errors=False,
         )
         self.add_event(
-            RECORD_END_TOPIC,
-            self._handle_record_end,
+            UTTERANCE_TOPIC,
+            self._handle_transcription_complete,
             speak_errors=False,
         )
         self.add_event(
             UNKNOWN_SPEECH_TOPIC,
-            self._clear_proactive_context,
+            self._handle_unknown_speech,
             speak_errors=False,
         )
 
@@ -86,14 +86,22 @@ class OpenClawSkill(FallbackSkill):
         response = self._proactive_speech.submit(message.data)
         self.bus.emit(message.response(response))
 
-    def _handle_record_end(self, message: Message) -> None:
-        """Play a brief cue when OVOS has finished capturing an utterance."""
+    def _play_end_listening_cue(self, message: Message) -> None:
+        """Play the cue only after STT can no longer capture its audio."""
         self.bus.emit(
             message.forward(
                 PLAY_SOUND_TOPIC,
                 {"uri": END_LISTENING_SOUND},
             )
         )
+
+    def _handle_transcription_complete(self, message: Message) -> None:
+        if self._is_blank_audio(self._fallback_query(message)):
+            self._play_end_listening_cue(message)
+
+    def _handle_unknown_speech(self, message: Message) -> None:
+        self._play_end_listening_cue(message)
+        self._clear_proactive_context()
 
     def _clear_proactive_context(self, _message: Message | None = None) -> None:
         with self._proactive_context_lock:
@@ -226,9 +234,9 @@ class OpenClawSkill(FallbackSkill):
 
     @staticmethod
     def _is_blank_audio(query: str) -> bool:
-        normalized = query.lower().replace("_", " ").strip(" []")
+        normalized = query.lower().replace("_", " ").strip(" []!.,?")
         normalized = " ".join(normalized.split())
-        return not normalized or normalized == "blank audio"
+        return not normalized or normalized in {"blank audio", "beep"}
 
     def _make_client(self, token: str) -> OpenClawClient:
         return OpenClawClient(

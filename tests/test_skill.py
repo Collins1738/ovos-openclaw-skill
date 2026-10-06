@@ -77,7 +77,10 @@ def test_direct_fallback_forwards_raw_utterance(monkeypatch):
 
 @pytest.mark.parametrize(
     "utterance",
-    ["[BLANK_AUDIO]", "BLANK _ AUDIO", "BLANK_AUDIO", "BLANK AUDIO"],
+    [
+        "[BLANK_AUDIO]", "BLANK _ AUDIO", "BLANK_AUDIO", "BLANK AUDIO",
+        "beep", "Beep!", "BEEP.",
+    ],
 )
 def test_direct_fallback_consumes_blank_audio_without_speaking(
     monkeypatch, utterance
@@ -226,29 +229,47 @@ def test_first_reply_receives_proactive_announcement_context(monkeypatch):
     assert skill._pending_proactive_context is None
 
 
-def test_unknown_speech_clears_proactive_context():
-    skill = bare_skill()
-    skill._pending_proactive_context = ("Reminder.", float("inf"))
-
-    skill._clear_proactive_context()
-
-    assert skill._pending_proactive_context is None
-
-
-def test_record_end_plays_the_packaged_completion_cue():
+def test_unknown_speech_plays_the_cue_and_clears_proactive_context():
     skill = bare_skill()
     skill._bus = Mock()
+    skill._pending_proactive_context = ("Reminder.", float("inf"))
     message = Mock()
     forwarded = Mock()
     message.forward.return_value = forwarded
 
-    skill._handle_record_end(message)
+    skill._handle_unknown_speech(message)
+
+    assert skill._pending_proactive_context is None
+    skill.bus.emit.assert_called_once_with(forwarded)
+
+
+def test_blank_transcription_plays_the_packaged_completion_cue():
+    skill = bare_skill()
+    skill._bus = Mock()
+    message = Mock()
+    message.data = {"utterances": ["BLANK_AUDIO"]}
+    forwarded = Mock()
+    message.forward.return_value = forwarded
+
+    skill._handle_transcription_complete(message)
 
     message.forward.assert_called_once_with(
         PLAY_SOUND_TOPIC,
         {"uri": END_LISTENING_SOUND},
     )
     skill.bus.emit.assert_called_once_with(forwarded)
+
+
+def test_real_transcription_does_not_play_the_completion_cue():
+    skill = bare_skill()
+    skill._bus = Mock()
+    message = Mock()
+    message.data = {"utterances": ["how are you doing"]}
+
+    skill._handle_transcription_complete(message)
+
+    message.forward.assert_not_called()
+    skill.bus.emit.assert_not_called()
 
 
 def test_proactive_response_and_result_never_echo_spoken_text():

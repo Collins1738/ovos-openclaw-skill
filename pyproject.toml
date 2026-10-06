@@ -28,6 +28,7 @@ ovos-openclaw-skill = "ovos_openclaw_skill:OpenClawSkill"
 
 [project.scripts]
 ovos-openclaw-speak = "ovos_openclaw_skill.proactive:main"
+ovos-openclaw-http = "ovos_openclaw_skill.http_ingress:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

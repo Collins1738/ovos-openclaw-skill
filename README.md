@@ -41,20 +41,24 @@ pipeline entry in its existing order.
 
 Follow-up mode is also enabled by default. After each successful response, the
 skill waits for TTS to finish and asks OVOS response mode to open the microphone.
-The normal `start_listening` cue plays when `confirm_listening` is enabled. A
-short descending cue plays when OVOS finishes recording, so the end of the
-listening window is audible. A blank or timed-out capture then closes the
-conversation. The turn limit prevents an accidental endless listening loop.
+The packaged `start_listening_safe.wav` keeps the normal start beep and adds
+750 ms of trailing silence. Dinkum remains in confirmation mode for the full
+file, preventing the speaker cue from entering Whisper's command buffer. A
+short descending cue plays only when OVOS receives silence, blank audio, or an
+unrecognized capture. Real speech moves directly to the response without an end
+cue. A blank, beep-only, or timed-out capture closes the conversation. The turn
+limit prevents an accidental endless listening loop.
 
 ## Proactive speech
 
 ### Trigger and transport
 
 The package installs `ovos-openclaw-speak`, an authenticated local producer for
-reminders and alerts. This command is the trigger. There is no new HTTP route,
-server, or listening port. A manual invocation, an OpenClaw automation, or
-another trusted local process runs the command and writes the approved speech
-to standard input:
+reminders and alerts. This command is the lowest-level trigger and opens no
+additional listening port itself. A manual invocation, an OpenClaw automation,
+or another trusted local process runs the command and writes the approved
+speech to standard input. The optional HTTP adapter documented below adds a
+loopback-only port and a Tailscale Funnel route for authenticated integrations.
 
 ```bash
 printf '%s' 'Reminder: stand up and stretch.' |
@@ -113,6 +117,74 @@ For an OpenClaw reminder, use an automation `command` payload with fixed argv
 approved reminder text in the payload's `input`, set delivery to `none`, and use
 a bounded timeout. A successful command waits for the correlated `spoken`
 result, rather than treating message-bus acceptance as audible completion.
+
+### HTTP ingress and Tailscale Funnel
+
+The package also installs `ovos-openclaw-http`, a narrow HTTP adapter for local
+and remote integrations. It binds to `127.0.0.1:8190` by default and refuses a
+non-loopback bind unless explicitly overridden. It accepts only JSON speech
+requests, never commands, and forwards accepted messages through the same signed
+OVOS bus pipeline.
+
+```text
+POST /v1/speak
+Authorization: Bearer <dedicated-speech-http-token>
+Content-Type: application/json
+Idempotency-Key: <lowercase UUIDv4>
+
+{"text":"Your laundry is ready.","lang":"en-us"}
+```
+
+An accepted request returns HTTP `202`. For 24 hours, replaying the same
+idempotency key and payload returns HTTP `200` with status `duplicate` and does
+not speak twice, including across service or skill restarts. Reusing a key with
+a different payload returns HTTP `409`. Responses never echo the announcement
+text. `GET /health` returns only the protocol version and service status. The
+server bounds concurrent requests and enforces an absolute request deadline.
+
+Use a separate random bearer token. This command creates it directly in macOS
+Keychain without printing it:
+
+```bash
+python3 - <<'PY'
+import secrets
+import subprocess
+
+subprocess.run([
+    "security", "add-generic-password", "-U",
+    "-s", "ovos-openclaw-skill",
+    "-a", "speech-http-token",
+    "-w", secrets.token_urlsafe(32),
+], check=True)
+PY
+```
+
+Start the adapter in the foreground for development:
+
+```bash
+~/.venvs/ovos/bin/ovos-openclaw-http --host 127.0.0.1 --port 8190
+```
+
+On Collins's Mac, launchd label `com.openvoiceos.ovos-openclaw-http` keeps that
+exact command running from
+`~/Library/LaunchAgents/com.openvoiceos.ovos-openclaw-http.plist`. Tailscale
+Funnel adds the `/speech` handler without replacing the existing root handler:
+
+```bash
+tailscale funnel --bg --set-path /speech http://127.0.0.1:8190
+tailscale funnel status --json
+```
+
+The public endpoints are therefore:
+
+```text
+GET  https://dravon-macbook.tail2c66c1.ts.net/speech/health
+POST https://dravon-macbook.tail2c66c1.ts.net/speech/v1/speak
+```
+
+Store the bearer token as a protected secret in each caller, including Railway.
+Never put it in source control, URLs, request bodies, or ordinary logs. The
+future Railway relay and durable expiring queue are tracked in `todo.md`.
 
 ## Security boundary
 
