@@ -96,7 +96,8 @@ class OpenClawSkill(FallbackSkill):
         )
 
     def _handle_transcription_complete(self, message: Message) -> None:
-        self._play_end_listening_cue(message)
+        if self._is_blank_audio(self._fallback_query(message)):
+            self._play_end_listening_cue(message)
 
     def _handle_unknown_speech(self, message: Message) -> None:
         self._play_end_listening_cue(message)

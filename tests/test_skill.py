@@ -243,10 +243,11 @@ def test_unknown_speech_plays_the_cue_and_clears_proactive_context():
     skill.bus.emit.assert_called_once_with(forwarded)
 
 
-def test_transcription_complete_plays_the_packaged_completion_cue():
+def test_blank_transcription_plays_the_packaged_completion_cue():
     skill = bare_skill()
     skill._bus = Mock()
     message = Mock()
+    message.data = {"utterances": ["BLANK_AUDIO"]}
     forwarded = Mock()
     message.forward.return_value = forwarded
 
@@ -257,6 +258,18 @@ def test_transcription_complete_plays_the_packaged_completion_cue():
         {"uri": END_LISTENING_SOUND},
     )
     skill.bus.emit.assert_called_once_with(forwarded)
+
+
+def test_real_transcription_does_not_play_the_completion_cue():
+    skill = bare_skill()
+    skill._bus = Mock()
+    message = Mock()
+    message.data = {"utterances": ["how are you doing"]}
+
+    skill._handle_transcription_complete(message)
+
+    message.forward.assert_not_called()
+    skill.bus.emit.assert_not_called()
 
 
 def test_proactive_response_and_result_never_echo_spoken_text():

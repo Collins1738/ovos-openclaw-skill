@@ -44,10 +44,10 @@ skill waits for TTS to finish and asks OVOS response mode to open the microphone
 The packaged `start_listening_safe.wav` keeps the normal start beep and adds
 750 ms of trailing silence. Dinkum remains in confirmation mode for the full
 file, preventing the speaker cue from entering Whisper's command buffer. A
-short descending cue plays after OVOS finishes transcription and marks the end
-of both spoken and silent listening windows. A blank, beep-only, or timed-out
-capture then closes the conversation. The turn limit prevents an accidental
-endless listening loop.
+short descending cue plays only when OVOS receives silence, blank audio, or an
+unrecognized capture. Real speech moves directly to the response without an end
+cue. A blank, beep-only, or timed-out capture closes the conversation. The turn
+limit prevents an accidental endless listening loop.
 
 ## Proactive speech
 
