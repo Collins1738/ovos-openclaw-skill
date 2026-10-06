@@ -41,13 +41,13 @@ pipeline entry in its existing order.
 
 Follow-up mode is also enabled by default. After each successful response, the
 skill waits for TTS to finish and asks OVOS response mode to open the microphone.
-On this Mac, `confirm_listening` is disabled because Dinkum starts the STT
-stream before playing `start_listening`; the start cue could therefore be
-transcribed as `beep`. A short descending cue instead plays after OVOS finishes
-transcription. It marks the end of both spoken and silent listening windows
-without entering the captured audio. A blank, beep-only, or timed-out capture
-then closes the conversation. The turn limit prevents an accidental endless
-listening loop.
+The packaged `start_listening_safe.wav` keeps the normal start beep and adds
+750 ms of trailing silence. Dinkum remains in confirmation mode for the full
+file, preventing the speaker cue from entering Whisper's command buffer. A
+short descending cue plays after OVOS finishes transcription and marks the end
+of both spoken and silent listening windows. A blank, beep-only, or timed-out
+capture then closes the conversation. The turn limit prevents an accidental
+endless listening loop.
 
 ## Proactive speech
 

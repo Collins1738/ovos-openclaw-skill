@@ -1,3 +1,4 @@
+import wave
 from importlib.metadata import entry_points
 from importlib.resources import files
 
@@ -27,6 +28,15 @@ def test_speech_http_console_entry_point_loads():
     matches = tuple(matches)
     assert len(matches) == 1
     assert matches[0].load() is speech_http_main
+
+
+def test_safe_start_listening_sound_is_packaged_with_guard_silence():
+    sound = files("ovos_openclaw_skill").joinpath(
+        "res/snd/start_listening_safe.wav"
+    )
+    assert sound.is_file()
+    with sound.open("rb") as stream, wave.open(stream, "rb") as audio:
+        assert audio.getnframes() / audio.getframerate() > 1.0
 
 
 def test_end_listening_sound_is_packaged():
