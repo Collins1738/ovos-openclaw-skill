@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+from threading import Lock
+from time import monotonic
 from typing import Any
 
 from ovos_bus_client import Message
@@ -23,7 +25,9 @@ DEFAULT_TIMEOUT = 60.0
 DEFAULT_MAX_TOKENS = 180
 DEFAULT_MAX_FOLLOW_UPS = 25
 DEFAULT_SPEECH_WAIT_TIMEOUT = 60
+DEFAULT_PROACTIVE_CONTEXT_SECONDS = 30
 RECORD_END_TOPIC = "recognizer_loop:record_end"
+UNKNOWN_SPEECH_TOPIC = "recognizer_loop:speech.recognition.unknown"
 PLAY_SOUND_TOPIC = "mycroft.audio.play_sound"
 END_LISTENING_SOUND = str(
     Path(__file__).parent / "res" / "snd" / "end_listening.wav"
@@ -49,12 +53,11 @@ class OpenClawSkill(FallbackSkill):
 
     def initialize(self) -> None:
         """Start the authenticated proactive-speech queue."""
-        settings = getattr(self, "settings", {})
+        self._proactive_context_lock = Lock()
+        self._pending_proactive_context: tuple[str, float] | None = None
         self._proactive_speech = ProactiveSpeechManager(
             speak=self._speak_proactively,
             result=self._emit_proactive_result,
-            quiet_start=str(settings.get("proactive_quiet_start", "23:00")),
-            quiet_end=str(settings.get("proactive_quiet_end", "08:00")),
         )
         self._proactive_speech.start()
         self.add_event(
@@ -65,6 +68,11 @@ class OpenClawSkill(FallbackSkill):
         self.add_event(
             RECORD_END_TOPIC,
             self._handle_record_end,
+            speak_errors=False,
+        )
+        self.add_event(
+            UNKNOWN_SPEECH_TOPIC,
+            self._clear_proactive_context,
             speak_errors=False,
         )
 
@@ -87,6 +95,27 @@ class OpenClawSkill(FallbackSkill):
             )
         )
 
+    def _clear_proactive_context(self, _message: Message | None = None) -> None:
+        with self._proactive_context_lock:
+            self._pending_proactive_context = None
+
+    def _consume_proactive_context(self) -> str | None:
+        with self._proactive_context_lock:
+            pending = self._pending_proactive_context
+            self._pending_proactive_context = None
+        if not pending or pending[1] < monotonic():
+            return None
+        return pending[0]
+
+    @staticmethod
+    def _contextualize_proactive_reply(announcement: str, reply: str) -> str:
+        return (
+            "Immediately before this reply, you proactively announced to "
+            f"Collins: {announcement!r}\n"
+            f"Collins replied: {reply!r}\n"
+            "Respond naturally to Collins using the announcement as context."
+        )
+
     def _speak_proactively(self, text: str, lang: str) -> None:
         # The skill locale owns TTS language. The signed language field keeps
         # the protocol explicit and leaves room for multilingual support later.
@@ -96,6 +125,11 @@ class OpenClawSkill(FallbackSkill):
             wait=45,
             meta={"proactive": True, "requested_lang": lang},
         )
+        with self._proactive_context_lock:
+            self._pending_proactive_context = (
+                text,
+                monotonic() + DEFAULT_PROACTIVE_CONTEXT_SECONDS,
+            )
 
     def _emit_proactive_result(self, result: dict[str, Any]) -> None:
         self.bus.emit(
@@ -125,10 +159,13 @@ class OpenClawSkill(FallbackSkill):
         if not self.can_answer(message):
             return False
         query = self._fallback_query(message)
+        proactive_context = self._consume_proactive_context()
         if self._is_blank_audio(query):
             # Whisper.cpp emits this marker for silence. Consume it without
             # letting another fallback speak a confusing answer.
             return True
+        if proactive_context:
+            query = self._contextualize_proactive_reply(proactive_context, query)
         self._conversation(query, message)
         return True
 

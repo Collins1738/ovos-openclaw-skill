@@ -51,16 +51,18 @@ conversation. The turn limit prevents an accidental endless listening loop.
 The package installs `ovos-openclaw-speak`, an authenticated local producer for
 reminders and alerts. It sends a short-lived HMAC-signed request over the
 loopback-only OVOS message bus. The skill verifies the signature, rejects
-replays, applies quiet hours and rate limits, queues at most five announcements,
+replays, applies rate limits, queues at most five announcements,
 and speaks them one at a time with `expect_response=true`. After each proactive
-announcement, OVOS opens its normal short response-mode listening window. Any
-captured reply enters the existing OpenClaw conversation and bounded follow-up
-flow; silence closes the window normally.
+announcement, OVOS opens its normal short response-mode listening window. The
+first captured reply is sent to OpenClaw together with the announcement text, so
+references such as “which meeting?” retain their meaning. The exchange then
+continues through the existing conversation and bounded follow-up flow; silence
+closes the window normally.
 
 Limits are intentionally conservative: 400 characters, 70 words, three accepted
-requests per minute, twelve per hour, and quiet hours from 23:00 through 08:00
-local time by default. Pending announcements are discarded on skill reload and
-never persisted as stale speech.
+requests per minute, and twelve per hour. Announcements are allowed at any local
+time. Pending announcements are discarded on skill reload and never persisted
+as stale speech.
 
 Use an independent random HMAC key. This command generates it inside the process
 and stores it directly in macOS Keychain without printing it:
@@ -129,8 +131,6 @@ Non-secret skill settings are optional:
 | `follow_up_enabled` | `true` | Open the microphone after successful answers |
 | `follow_up_max_turns` | `25` | Maximum no-wake follow-ups, bounded 0–25 |
 | `follow_up_speech_timeout` | `60` | Maximum wait for TTS to finish, bounded 5–120 seconds |
-| `proactive_quiet_start` | `23:00` | Local quiet-hours start in 24-hour time |
-| `proactive_quiet_end` | `08:00` | Local quiet-hours end in 24-hour time |
 | `gateway_url` | `http://127.0.0.1:18789` | Gateway base URL |
 | `model` | `openclaw/default` | OpenAI-compatible model name |
 | `conversation` | `ovos-openclaw-skill` | Stable OpenAI `user` ID |

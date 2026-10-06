@@ -1,7 +1,6 @@
 import json
 import sys
 import uuid
-from datetime import datetime
 from threading import Event
 from unittest.mock import Mock
 
@@ -15,9 +14,7 @@ from ovos_openclaw_skill.proactive import (
     RESPONSE_TOPIC,
     RESULT_TOPIC,
     SpeechRequest,
-    is_quiet_time,
     make_request,
-    parse_clock,
     sanitize_text,
     send_request,
     sign_request,
@@ -39,13 +36,12 @@ def request(text="Your package was delivered.", request_id=None):
     )
 
 
-def manager(*, speak=None, result=None, local_hour=12):
+def manager(*, speak=None, result=None):
     instance = ProactiveSpeechManager(
         speak=speak or Mock(),
         result=result or Mock(),
         secret_provider=lambda: SECRET,
         now=lambda: NOW,
-        local_now=lambda: datetime(2026, 10, 6, local_hour, 0),
     )
     instance.start()
     return instance
@@ -142,25 +138,6 @@ def test_expired_and_future_requests_are_rejected():
         assert instance.submit(future)["reason"] == "expired"
     finally:
         instance.stop()
-
-
-def test_quiet_hours_reject_before_queueing():
-    instance = manager(local_hour=23)
-    try:
-        response = instance.submit(request())
-        assert response["status"] == "rejected"
-        assert response["reason"] == "quiet_hours"
-    finally:
-        instance.stop()
-
-
-@pytest.mark.parametrize(
-    ("hour", "expected"),
-    [(22, False), (23, True), (0, True), (7, True), (8, False)],
-)
-def test_quiet_hours_cross_midnight(hour, expected):
-    now = datetime(2026, 10, 6, hour, 0)
-    assert is_quiet_time(now, parse_clock("23:00"), parse_clock("08:00")) is expected
 
 
 def test_text_bounds_and_controls():

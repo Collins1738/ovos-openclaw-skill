@@ -1,3 +1,4 @@
+from threading import Lock
 from types import SimpleNamespace
 from unittest.mock import Mock, call
 
@@ -17,6 +18,8 @@ def bare_skill():
     skill.speak = Mock()
     skill.log = Mock()
     skill._settings = {"follow_up_enabled": False}
+    skill._proactive_context_lock = Lock()
+    skill._pending_proactive_context = None
     skill.shutdown = Mock()
     skill.default_shutdown = Mock()
     return skill
@@ -191,7 +194,7 @@ def test_direct_fallback_can_be_disabled():
     skill.speak.assert_not_called()
 
 
-def test_proactive_speech_opens_follow_up_listening():
+def test_proactive_speech_opens_follow_up_listening_and_saves_context():
     skill = bare_skill()
 
     skill._speak_proactively("Reminder: hydrate.", "en-us")
@@ -202,6 +205,34 @@ def test_proactive_speech_opens_follow_up_listening():
         wait=45,
         meta={"proactive": True, "requested_lang": "en-us"},
     )
+    assert skill._pending_proactive_context[0] == "Reminder: hydrate."
+
+
+def test_first_reply_receives_proactive_announcement_context(monkeypatch):
+    skill = bare_skill()
+    skill._pending_proactive_context = ("Your meeting starts soon.", float("inf"))
+    client = Mock()
+    client.complete.return_value = "The design review."
+    skill._make_client = Mock(return_value=client)
+    monkeypatch.setattr("ovos_openclaw_skill.get_gateway_token", lambda: "token")
+
+    skill.handle_direct_request(
+        SimpleNamespace(data={"utterance": "which meeting?"})
+    )
+
+    prompt = client.complete.call_args.args[0]
+    assert "Your meeting starts soon." in prompt
+    assert "which meeting?" in prompt
+    assert skill._pending_proactive_context is None
+
+
+def test_unknown_speech_clears_proactive_context():
+    skill = bare_skill()
+    skill._pending_proactive_context = ("Reminder.", float("inf"))
+
+    skill._clear_proactive_context()
+
+    assert skill._pending_proactive_context is None
 
 
 def test_record_end_plays_the_packaged_completion_cue():

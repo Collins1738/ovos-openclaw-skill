@@ -14,7 +14,6 @@ import time
 import uuid
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime, time as clock_time
 from threading import Event, Lock, Thread
 from typing import Any, Callable, Sequence
 
@@ -40,8 +39,6 @@ DEDUPE_CAPACITY = 2048
 DEDUPE_TTL_SECONDS = 24 * 60 * 60
 DEFAULT_REQUEST_LIFETIME = 60
 DEFAULT_WAIT_TIMEOUT = 70.0
-DEFAULT_QUIET_START = "23:00"
-DEFAULT_QUIET_END = "08:00"
 _CONTROL_CHARACTERS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 _REQUEST_FIELDS = {
     "v", "request_id", "issued_at", "expires_at", "text", "lang", "signature"
@@ -73,22 +70,6 @@ def sanitize_text(text: str) -> str:
     if len(normalized.split()) > MAX_WORDS:
         raise ProactiveSpeechError("too_large")
     return normalized
-
-
-def parse_clock(value: str) -> clock_time:
-    try:
-        return datetime.strptime(value, "%H:%M").time()
-    except ValueError as error:
-        raise ProactiveSpeechError("invalid quiet-hours configuration") from error
-
-
-def is_quiet_time(now: datetime, start: clock_time, end: clock_time) -> bool:
-    current = now.time().replace(second=0, microsecond=0)
-    if start == end:
-        return False
-    if start < end:
-        return start <= current < end
-    return current >= start or current < end
 
 
 def signature_payload(request: SpeechRequest) -> bytes:
@@ -160,17 +141,11 @@ class ProactiveSpeechManager:
         result: Callable[[dict[str, Any]], None],
         secret_provider: Callable[[], str | None] = get_proactive_speech_secret,
         now: Callable[[], float] = time.time,
-        local_now: Callable[[], datetime] = lambda: datetime.now().astimezone(),
-        quiet_start: str = DEFAULT_QUIET_START,
-        quiet_end: str = DEFAULT_QUIET_END,
     ):
         self._speak = speak
         self._result = result
         self._secret_provider = secret_provider
         self._now = now
-        self._local_now = local_now
-        self._quiet_start = parse_clock(quiet_start)
-        self._quiet_end = parse_clock(quiet_end)
         self._queue: queue.Queue[SpeechRequest | None] = queue.Queue(maxsize=QUEUE_CAPACITY)
         self._lock = Lock()
         self._seen: dict[str, float] = {}
@@ -280,8 +255,6 @@ class ProactiveSpeechManager:
         lifetime = request.expires_at - request.issued_at
         if lifetime <= 0 or lifetime > MAX_LIFETIME_SECONDS:
             raise ProactiveSpeechError("expired")
-        if is_quiet_time(self._local_now(), self._quiet_start, self._quiet_end):
-            raise ProactiveSpeechError("quiet_hours")
         with self._lock:
             if not self._accepting:
                 raise ProactiveSpeechError("unavailable")
@@ -322,8 +295,6 @@ class ProactiveSpeechManager:
                     return
                 if request.expires_at <= self._now():
                     self._emit_result(request.request_id, "expired")
-                elif is_quiet_time(self._local_now(), self._quiet_start, self._quiet_end):
-                    self._emit_result(request.request_id, "quiet_hours")
                 else:
                     try:
                         self._speak(request.text, request.lang)
