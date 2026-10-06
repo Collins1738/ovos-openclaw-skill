@@ -48,16 +48,43 @@ conversation. The turn limit prevents an accidental endless listening loop.
 
 ## Proactive speech
 
+### Trigger and transport
+
 The package installs `ovos-openclaw-speak`, an authenticated local producer for
-reminders and alerts. It sends a short-lived HMAC-signed request over the
-loopback-only OVOS message bus. The skill verifies the signature, rejects
-replays, applies rate limits, queues at most five announcements,
-and speaks them one at a time with `expect_response=true`. After each proactive
-announcement, OVOS opens its normal short response-mode listening window. The
-first captured reply is sent to OpenClaw together with the announcement text, so
-references such as “which meeting?” retain their meaning. The exchange then
-continues through the existing conversation and bounded follow-up flow; silence
-closes the window normally.
+reminders and alerts. This command is the trigger. There is no new HTTP route,
+server, or listening port. A manual invocation, an OpenClaw automation, or
+another trusted local process runs the command and writes the approved speech
+to standard input:
+
+```bash
+printf '%s' 'Reminder: stand up and stretch.' |
+  ~/.venvs/ovos/bin/ovos-openclaw-speak --stdin
+```
+
+The command loads its dedicated secret from macOS Keychain, creates a
+short-lived signed request, and sends it through the existing OVOS WebSocket
+message bus at `127.0.0.1:8181/core`. The skill verifies the signature, rejects
+replays, applies rate limits, queues at most five announcements, and speaks them
+one at a time with `expect_response=true`.
+
+```text
+local trigger -> ovos-openclaw-speak -> signed OVOS bus message
+              -> 127.0.0.1:8181/core -> verified FIFO queue
+              -> Piper speech -> response-mode microphone
+```
+
+The initial announcement does not use the OpenClaw Gateway HTTP route. The
+Gateway at `127.0.0.1:18789` is contacted only if the listener captures a spoken
+reply that needs an OpenClaw response.
+
+### Reply context
+
+After each proactive announcement, OVOS opens its normal short response-mode
+listening window. The skill retains the announcement for 30 seconds. The first
+captured reply is sent to OpenClaw together with that announcement, so references
+such as “which meeting?” retain their meaning. The context is consumed once and
+is also cleared by silence or failed transcription. The exchange then continues
+through the existing stable OpenClaw conversation and bounded follow-up flow.
 
 Limits are intentionally conservative: 400 characters, 70 words, three accepted
 requests per minute, and twelve per hour. Announcements are allowed at any local
@@ -79,13 +106,6 @@ subprocess.run([
     "-w", secrets.token_urlsafe(32),
 ], check=True)
 PY
-```
-
-Manual test, with message text read from standard input instead of process argv:
-
-```bash
-printf '%s' 'Reminder: stand up and stretch.' |
-  ~/.venvs/ovos/bin/ovos-openclaw-speak --stdin
 ```
 
 For an OpenClaw reminder, use an automation `command` payload with fixed argv
