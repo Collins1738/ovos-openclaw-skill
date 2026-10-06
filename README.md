@@ -12,7 +12,7 @@ wake word -> local STT -> high-priority OpenClaw fallback -> OVOS skill
           -> listening cue -> bounded no-wake follow-up turns
 
 OpenClaw automation -> signed local OVOS bus request -> bounded FIFO queue
-                    -> Piper announcement, never follow-up listening
+                    -> Piper announcement -> short follow-up listening window
 ```
 
 The OpenAI-compatible request uses model `openclaw/default`, a concise
@@ -51,7 +51,10 @@ The package installs `ovos-openclaw-speak`, an authenticated local producer for
 reminders and alerts. It sends a short-lived HMAC-signed request over the
 loopback-only OVOS message bus. The skill verifies the signature, rejects
 replays, applies quiet hours and rate limits, queues at most five announcements,
-and speaks them one at a time with `expect_response=false`.
+and speaks them one at a time with `expect_response=true`. After each proactive
+announcement, OVOS opens its normal short response-mode listening window. Any
+captured reply enters the existing OpenClaw conversation and bounded follow-up
+flow; silence closes the window normally.
 
 Limits are intentionally conservative: 400 characters, 70 words, three accepted
 requests per minute, twelve per hour, and quiet hours from 23:00 through 08:00

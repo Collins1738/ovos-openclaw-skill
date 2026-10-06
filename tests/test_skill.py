@@ -187,14 +187,14 @@ def test_direct_fallback_can_be_disabled():
     skill.speak.assert_not_called()
 
 
-def test_proactive_speech_never_opens_follow_up_listening():
+def test_proactive_speech_opens_follow_up_listening():
     skill = bare_skill()
 
     skill._speak_proactively("Reminder: hydrate.", "en-us")
 
     skill.speak.assert_called_once_with(
         "Reminder: hydrate.",
-        expect_response=False,
+        expect_response=True,
         wait=45,
         meta={"proactive": True, "requested_lang": "en-us"},
     )

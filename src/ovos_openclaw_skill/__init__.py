@@ -72,7 +72,7 @@ class OpenClawSkill(FallbackSkill):
         # the protocol explicit and leaves room for multilingual support later.
         self.speak(
             text,
-            expect_response=False,
+            expect_response=True,
             wait=45,
             meta={"proactive": True, "requested_lang": lang},
         )
