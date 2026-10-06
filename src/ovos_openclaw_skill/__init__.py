@@ -18,6 +18,8 @@ DEFAULT_MODEL = "openclaw/default"
 DEFAULT_CONVERSATION = "ovos-openclaw-skill"
 DEFAULT_TIMEOUT = 60.0
 DEFAULT_MAX_TOKENS = 180
+DEFAULT_MAX_FOLLOW_UPS = 25
+DEFAULT_SPEECH_WAIT_TIMEOUT = 60
 
 
 class OpenClawSkill(FallbackSkill):
@@ -48,7 +50,7 @@ class OpenClawSkill(FallbackSkill):
         if not query:
             self.speak("What would you like to ask Dravon?")
             return
-        self._answer(query)
+        self._conversation(query, message)
 
     @fallback_handler(priority=1)
     def handle_direct_request(self, message: Any) -> bool:
@@ -60,14 +62,35 @@ class OpenClawSkill(FallbackSkill):
             # Whisper.cpp emits this marker for silence. Consume it without
             # letting another fallback speak a confusing answer.
             return True
-        self._answer(query)
+        self._conversation(query, message)
         return True
 
-    def _answer(self, query: str) -> None:
+    def _conversation(self, query: str, message: Any) -> None:
+        """Answer a request, then collect bounded no-wake follow-up turns."""
+        follow_up_enabled = bool(
+            getattr(self, "settings", {}).get("follow_up_enabled", True)
+        )
+        max_follow_ups = self._bounded_int(
+            "follow_up_max_turns", DEFAULT_MAX_FOLLOW_UPS, 0, 25
+        )
+
+        for turn in range(max_follow_ups + 1):
+            should_listen = follow_up_enabled and turn < max_follow_ups
+            if not self._answer(query, wait_for_speech=should_listen):
+                return
+            if not should_listen:
+                return
+
+            follow_up = self.get_response(message=message, num_retries=0)
+            if not follow_up or self._is_blank_audio(follow_up):
+                return
+            query = str(follow_up).strip()
+
+    def _answer(self, query: str, wait_for_speech: bool = False) -> bool:
         token = get_gateway_token()
         if not token:
             self.speak("Dravon is not configured yet.")
-            return
+            return False
 
         try:
             answer = self._make_client(token).complete(query)
@@ -75,8 +98,19 @@ class OpenClawSkill(FallbackSkill):
             # OpenClawError messages are deliberately coarse and never contain tokens.
             self.log.warning("OpenClaw bridge request failed: %s", error)
             self.speak("I couldn't reach Dravon right now.")
-            return
-        self.speak(answer)
+            return False
+
+        if wait_for_speech:
+            wait_timeout = self._bounded_int(
+                "follow_up_speech_timeout",
+                DEFAULT_SPEECH_WAIT_TIMEOUT,
+                5,
+                120,
+            )
+            self.speak(answer, wait=wait_timeout)
+        else:
+            self.speak(answer)
+        return True
 
     @staticmethod
     def _fallback_query(message: Any) -> str:

@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 
 import pytest
 
@@ -12,7 +12,7 @@ def bare_skill():
     skill = object.__new__(OpenClawSkill)
     skill.speak = Mock()
     skill.log = Mock()
-    skill._settings = {}
+    skill._settings = {"follow_up_enabled": False}
     skill.shutdown = Mock()
     skill.default_shutdown = Mock()
     return skill
@@ -87,6 +87,86 @@ def test_direct_fallback_consumes_blank_audio_without_speaking(
     assert handled is True
     make_client.assert_not_called()
     skill.speak.assert_not_called()
+
+
+def test_follow_up_mode_routes_multiple_turns_without_wake_word(monkeypatch):
+    skill = bare_skill()
+    skill._settings.update(
+        {"follow_up_enabled": True, "follow_up_max_turns": 3}
+    )
+    client = Mock()
+    client.complete.side_effect = ["First answer.", "Second answer."]
+    skill._make_client = Mock(return_value=client)
+    skill.get_response = Mock(side_effect=["and what about tomorrow", None])
+    monkeypatch.setattr("ovos_openclaw_skill.get_gateway_token", lambda: "token")
+    message = SimpleNamespace(data={"utterance": "what about today"})
+
+    handled = skill.handle_direct_request(message)
+
+    assert handled is True
+    assert client.complete.call_args_list == [
+        call("what about today"),
+        call("and what about tomorrow"),
+    ]
+    assert skill.speak.call_args_list == [
+        call("First answer.", wait=60),
+        call("Second answer.", wait=60),
+    ]
+    assert skill.get_response.call_args_list == [
+        call(message=message, num_retries=0),
+        call(message=message, num_retries=0),
+    ]
+
+
+def test_follow_up_mode_stops_silently_on_blank_audio(monkeypatch):
+    skill = bare_skill()
+    skill._settings.update({"follow_up_enabled": True})
+    client = Mock()
+    client.complete.return_value = "First answer."
+    skill._make_client = Mock(return_value=client)
+    skill.get_response = Mock(return_value="BLANK _ AUDIO")
+    monkeypatch.setattr("ovos_openclaw_skill.get_gateway_token", lambda: "token")
+
+    skill.handle_direct_request(SimpleNamespace(data={"utterance": "hello"}))
+
+    client.complete.assert_called_once_with("hello")
+    skill.speak.assert_called_once_with("First answer.", wait=60)
+
+
+def test_follow_up_mode_enforces_turn_limit(monkeypatch):
+    skill = bare_skill()
+    skill._settings.update(
+        {"follow_up_enabled": True, "follow_up_max_turns": 1}
+    )
+    client = Mock()
+    client.complete.side_effect = ["First.", "Second."]
+    skill._make_client = Mock(return_value=client)
+    skill.get_response = Mock(return_value="follow up")
+    monkeypatch.setattr("ovos_openclaw_skill.get_gateway_token", lambda: "token")
+
+    skill.handle_direct_request(SimpleNamespace(data={"utterance": "initial"}))
+
+    assert client.complete.call_count == 2
+    skill.get_response.assert_called_once()
+    assert skill.speak.call_args_list == [
+        call("First.", wait=60),
+        call("Second."),
+    ]
+
+
+def test_follow_up_mode_caps_requested_limit_at_twenty_five():
+    skill = bare_skill()
+    skill._settings.update(
+        {"follow_up_enabled": True, "follow_up_max_turns": 99}
+    )
+    skill._answer = Mock(return_value=True)
+    skill.get_response = Mock(return_value="next")
+    message = SimpleNamespace(data={"utterance": "initial"})
+
+    skill._conversation("initial", message)
+
+    assert skill._answer.call_count == 26
+    assert skill.get_response.call_count == 25
 
 
 def test_direct_fallback_only_advertises_nonempty_utterances():
