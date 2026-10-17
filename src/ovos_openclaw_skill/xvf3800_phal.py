@@ -16,17 +16,25 @@ VID, PID = 0x2886, 0x001A
 LED_RESID = 20
 LED_EFFECT = 12
 LED_RING_COLOR = 19
-LED_COLOR = 16
-LED_DOA_COLOR = 17
 DOA_VALUE = 18
-DOA_BASE_COLOR = 0x0000FF
-DOA_DIRECTION_COLOR = 0x00FF00
 LED_COUNT = 12
 FRAME_INTERVAL = 0.10
+LISTENING_FADE_PER_FRAME = 0.14
 
 
 def _color(red, green, blue):
     return (max(0, min(255, int(red))) << 16) | (max(0, min(255, int(green))) << 8) | max(0, min(255, int(blue)))
+
+
+def render_listening_ring(azimuth, highlight):
+    """Keep a blue ring visible while the voice direction fades out smoothly."""
+    direction = (azimuth % 360) * LED_COUNT / 360
+    frame = []
+    for index in range(LED_COUNT):
+        distance = abs((index - direction + LED_COUNT / 2) % LED_COUNT - LED_COUNT / 2)
+        strength = max(0.0, 1.0 - distance / 1.5) * highlight
+        frame.append(_color(0, 210 * strength, 90 + 165 * (1 - strength)))
+    return frame
 
 
 def render_ring(state, seconds):
@@ -51,8 +59,8 @@ class XVF3800LED:
         self._device = None
         self._state = "idle"
         self._mode = None
-        self._doa_ready = False
-        self._quiet_samples = 0
+        self._azimuth = 0
+        self._highlight = 0.0
         self._wake = Event()
         self._stop = Event()
         self._thread = None
@@ -64,14 +72,15 @@ class XVF3800LED:
             0, command, LED_RESID, payload, timeout=1000,
         )
 
-    def _speech_detected(self):
+    def _direction(self):
         for _ in range(3):
             response = self._device.ctrl_transfer(
                 usb.util.CTRL_IN | usb.util.CTRL_TYPE_VENDOR | usb.util.CTRL_RECIPIENT_DEVICE,
                 0, 0x80 | DOA_VALUE, LED_RESID, 5, timeout=1000,
             )
             if response[0] == 0:
-                return bool(int.from_bytes(bytes(response[3:5]), "little"))
+                return (int.from_bytes(bytes(response[1:3]), "little"),
+                        bool(int.from_bytes(bytes(response[3:5]), "little")))
             if response[0] != 64:
                 raise OSError(f"XVF3800 DOA read status {response[0]}")
         raise OSError("XVF3800 DOA read remained busy")
@@ -81,8 +90,7 @@ class XVF3800LED:
             raise ValueError("invalid LED state")
         with self._lock:
             if self._state != state:
-                self._doa_ready = False
-                self._quiet_samples = 0
+                self._highlight = 0.0
             self._state = state
         self._wake.set()
 
@@ -95,7 +103,6 @@ class XVF3800LED:
             if self._device is None:
                 self._device = usb.core.find(idVendor=VID, idProduct=PID)
                 self._mode = None
-                self._doa_ready = False
             if self._device is None:
                 raise OSError("XVF3800 USB device unavailable")
             try:
@@ -104,24 +111,17 @@ class XVF3800LED:
                         self._write(LED_EFFECT, b"\x00")
                         self._mode = "idle"
                 elif state == "listening":
-                    # Preserve the existing beam-direction cue. The blue fill
-                    # covers the firmware's blank ring during quiet gaps.
-                    if not self._doa_ready:
-                        self._write(LED_DOA_COLOR, b"".join(c.to_bytes(4, "little")
-                            for c in (DOA_BASE_COLOR, DOA_DIRECTION_COLOR)))
-                        self._write(LED_COLOR, DOA_BASE_COLOR.to_bytes(4, "little"))
-                        self._doa_ready = True
-                    if self._speech_detected():
-                        self._quiet_samples = 0
-                        if self._mode != "doa":
-                            self._write(LED_EFFECT, b"\x04")
-                            self._mode = "doa"
+                    azimuth, speech = self._direction()
+                    if speech:
+                        self._azimuth = azimuth
+                        self._highlight = 1.0
                     else:
-                        self._quiet_samples += 1
-                        if self._mode not in ("solid", "doa") or self._quiet_samples >= 4:
-                            if self._mode != "solid":
-                                self._write(LED_EFFECT, b"\x03")
-                                self._mode = "solid"
+                        self._highlight = max(0.0, self._highlight - LISTENING_FADE_PER_FRAME)
+                    frame = render_listening_ring(self._azimuth, self._highlight)
+                    self._write(LED_RING_COLOR, b"".join(c.to_bytes(4, "little") for c in frame))
+                    if self._mode != "ring":
+                        self._write(LED_EFFECT, b"\x05")
+                        self._mode = "ring"
                 else:
                     frame = render_ring(state, seconds)
                     self._write(LED_RING_COLOR, b"".join(c.to_bytes(4, "little") for c in frame))
@@ -132,7 +132,6 @@ class XVF3800LED:
                 usb.util.dispose_resources(self._device)
                 self._device = None
                 self._mode = None
-                self._doa_ready = False
                 raise
 
     def _run(self):

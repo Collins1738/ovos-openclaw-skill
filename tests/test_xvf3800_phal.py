@@ -1,6 +1,8 @@
 from unittest.mock import Mock, patch
 
-from ovos_openclaw_skill.xvf3800_phal import LED_COUNT, XVF3800LED, XVF3800PHAL, render_ring
+from ovos_openclaw_skill.xvf3800_phal import (
+    LED_COUNT, XVF3800LED, XVF3800PHAL, render_listening_ring, render_ring,
+)
 
 
 def test_ring_frames_and_usb_commands_never_persist_or_touch_mute():
@@ -14,10 +16,10 @@ def test_ring_frames_and_usb_commands_never_persist_or_touch_mute():
         led.set_state("idle")
         led.tick(1.0)
     calls = device.ctrl_transfer.call_args_list
-    assert [call.args[2] for call in calls] == [17, 16, 146, 12, 19, 12, 19, 12]
+    assert [call.args[2] for call in calls] == [146, 19, 12, 19, 19, 12]
     assert all(call.args[3] == 20 for call in calls)
     assert all(len(call.args[4]) == LED_COUNT * 4 for call in calls if call.args[2] == 19)
-    assert calls[5].args[4] == b"\x05"
+    assert calls[2].args[4] == b"\x05"
     assert calls[-1].args[4] == b"\x00"
     assert len(set(render_ring("thinking", 0))) > 1
     assert render_ring("thinking", 0) != render_ring("speaking", 0)
@@ -46,21 +48,28 @@ def test_unknown_speech_event_is_registered():
     )
 
 
-def test_direction_survives_short_quiet_gap_and_recovers():
+def test_listening_stays_blue_and_green_direction_fades_without_mode_flicker():
     device = Mock()
-    speech = [True, False, False, False, False, True]
+    speech = [True] + [False] * 8 + [True]
 
     def transfer(*args, **kwargs):
         if args[0] & 0x80:
-            return bytes([0, 0, 0, int(speech.pop(0)), 0])
+            return bytes([0, 90, 0, int(speech.pop(0)), 0])
         return None
 
     device.ctrl_transfer.side_effect = transfer
     led = XVF3800LED()
     with patch("ovos_openclaw_skill.xvf3800_phal.usb.core.find", return_value=device):
         led.set_state("listening")
-        for _ in range(6):
+        for _ in range(10):
             led.tick(1.0)
-    effects = [call.args[4] for call in device.ctrl_transfer.call_args_list
-               if call.args[2] == 12]
-    assert effects == [b"\x04", b"\x03", b"\x04"]
+    calls = device.ctrl_transfer.call_args_list
+    effects = [call.args[4] for call in calls if call.args[2] == 12]
+    assert effects == [b"\x05"]
+    frames = [call.args[4] for call in calls if call.args[2] == 19]
+    assert len(frames) == 10
+    assert frames[0] == frames[-1]
+    assert frames[0] != frames[8]
+    assert frames[8] == b"\xff\x00\x00\x00" * LED_COUNT
+    assert all(frame for frame in frames)
+    assert render_listening_ring(90, 1) != render_listening_ring(0, 1)
