@@ -241,3 +241,22 @@ Non-secret skill settings are optional:
 
 The plugin is published under the current `opm.skill` entry-point group.
 
+
+## ReSpeaker XVF3800 LED cues
+
+The optional `xvf3800-led` PHAL plugin follows OVOS bus events on the Seeed
+ReSpeaker XVF3800 USB 4-Mic Array. It shows blue while recording, amber while
+processing, green during audio output, and off when playback ends. The plugin
+uses only the device's `LED_COLOR` and `LED_EFFECT` USB controls. It never
+writes `SAVE_CONFIGURATION` or touches the microphone mute GPO. The saved
+idle-off setting therefore remains intact across power cycles.
+
+Install this checkout into the OVOS virtualenv, then restart only `ovos-phal`.
+The `opm.phal` entry point is discovered automatically. This plugin applies
+only to USB VID `2886`, PID `001A`; other reSpeaker products need a different
+control path. A missing or unplugged device is logged without crashing PHAL,
+and the next event retries discovery. Verify `PHAL plugin loaded: xvf3800-led`
+in the PHAL log after restart. To disable it, uninstall this checkout or set
+`PHAL.xvf3800-led.enabled` to `false` in the OVOS configuration and restart
+PHAL. Source protocol: Seeed's `python_control/xvf_host.py` in the
+[reSpeaker XVF3800 USB 4MIC Array repository](https://github.com/respeaker/reSpeaker_XVF3800_USB_4MIC_ARRAY).
