@@ -307,3 +307,48 @@ def test_skill_registers_intent_and_high_priority_fallback():
     assert "dravon.intent" in OpenClawSkill.handle_dravon.intents
     assert OpenClawSkill.handle_direct_request.fallback_priority == 1
 
+
+@pytest.mark.parametrize("utterance", [
+    "start a new conversation", "Dravon, start a new conversation.",
+    "Hey Dravon start new session", "begin a new session!",
+])
+def test_spoken_reset_rotates_conversation_without_gateway_call(utterance):
+    skill = bare_skill()
+    skill._make_client = Mock()
+    skill.handle_direct_request(SimpleNamespace(data={"utterance": utterance}))
+    new_key = skill._settings["active_conversation"]
+    assert new_key.startswith("ovos-openclaw-skill:voice-")
+    assert skill._make_client.call_count == 0
+    assert skill.speak.call_args.args[0] == "Okay, new conversation started."
+
+
+def test_spoken_reset_persists_and_changes_client_key(monkeypatch):
+    skill = bare_skill()
+    class Settings(dict):
+        store = Mock()
+    skill._settings = Settings(skill._settings)
+    skill._reset_if_requested("start a new conversation")
+    first_key = skill._make_client("token").conversation
+    skill._reset_if_requested("start a new conversation")
+    assert first_key != skill._make_client("token").conversation
+    assert skill._settings.store.call_count == 2
+    reloaded = bare_skill()
+    reloaded._settings.update(skill._settings)
+    assert reloaded._make_client("token").conversation == skill._make_client("token").conversation
+
+
+def test_follow_up_reset_ends_listening_without_gateway_call():
+    skill = bare_skill()
+    skill._settings["follow_up_enabled"] = True
+    skill._answer = Mock(return_value=True)
+    skill.get_response = Mock(return_value="start a new conversation")
+    skill._conversation("hello", SimpleNamespace(data={"utterance": "hello"}))
+    skill._answer.assert_called_once()
+    skill.get_response.assert_called_once()
+    assert skill.speak.call_args.args[0] == "Okay, new conversation started."
+
+
+def test_reset_only_matches_standalone_command():
+    skill = bare_skill()
+    assert skill._reset_if_requested("How do I start a new conversation?") is False
+    assert "active_conversation" not in skill._settings

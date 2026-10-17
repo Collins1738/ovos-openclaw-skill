@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 from threading import Lock
 from time import monotonic
 from typing import Any
+from uuid import uuid4
 
 from ovos_bus_client import Message
 from ovos_utils import classproperty
@@ -31,6 +33,13 @@ UNKNOWN_SPEECH_TOPIC = "recognizer_loop:speech.recognition.unknown"
 PLAY_SOUND_TOPIC = "mycroft.audio.play_sound"
 END_LISTENING_SOUND = str(
     Path(__file__).parent / "res" / "snd" / "end_listening.wav"
+)
+
+
+RESET_CONVERSATION = re.compile(
+    r"^(?:(?:hey\s+)?dravon[\s,]+)?(?:start|begin)(?:\s+a)?\s+"
+    r"new\s+(?:conversation|session)$",
+    re.IGNORECASE,
 )
 
 
@@ -172,6 +181,8 @@ class OpenClawSkill(FallbackSkill):
             # Whisper.cpp emits this marker for silence. Consume it without
             # letting another fallback speak a confusing answer.
             return True
+        if self._reset_if_requested(query):
+            return True
         if proactive_context:
             query = self._contextualize_proactive_reply(proactive_context, query)
         self._conversation(query, message)
@@ -187,6 +198,8 @@ class OpenClawSkill(FallbackSkill):
         )
 
         for turn in range(max_follow_ups + 1):
+            if self._reset_if_requested(query):
+                return
             should_listen = follow_up_enabled and turn < max_follow_ups
             if not self._answer(query, wait_for_speech=should_listen):
                 return
@@ -197,6 +210,20 @@ class OpenClawSkill(FallbackSkill):
             if not follow_up or self._is_blank_audio(follow_up):
                 return
             query = str(follow_up).strip()
+
+    def _reset_if_requested(self, query: str) -> bool:
+        """Rotate the persisted voice key without forwarding the command."""
+        normalized = re.sub(r"[.!?]+$", "", query.strip()).strip()
+        if not RESET_CONVERSATION.fullmatch(normalized):
+            return False
+        base = str(self.settings.get("conversation", DEFAULT_CONVERSATION))
+        self.settings["active_conversation"] = f"{base}:voice-{uuid4().hex}"
+        store = getattr(self.settings, "store", None)
+        if callable(store):
+            store()
+        self._clear_proactive_context()
+        self.speak("Okay, new conversation started.")
+        return True
 
     def _answer(self, query: str, wait_for_speech: bool = False) -> bool:
         token = get_gateway_token()
@@ -244,7 +271,8 @@ class OpenClawSkill(FallbackSkill):
             token=token,
             model=str(self.settings.get("model", DEFAULT_MODEL)),
             conversation=str(
-                self.settings.get("conversation", DEFAULT_CONVERSATION)
+                self.settings.get("active_conversation")
+                or self.settings.get("conversation", DEFAULT_CONVERSATION)
             ),
             timeout=self._bounded_float("timeout", DEFAULT_TIMEOUT, 1.0, 120.0),
             max_tokens=self._bounded_int(
