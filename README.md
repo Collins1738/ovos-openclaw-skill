@@ -258,9 +258,12 @@ The plugin is published under the current `opm.skill` entry-point group.
 ## ReSpeaker XVF3800 LED cues
 
 The optional `xvf3800-led` PHAL plugin follows OVOS bus events on the Seeed
-ReSpeaker XVF3800 USB 4-Mic Array. It shows blue while recording, amber while
-processing, green during audio output, and off when playback ends. The plugin
-uses only the device's `LED_COLOR` and `LED_EFFECT` USB controls. It never
+ReSpeaker XVF3800 USB 4-Mic Array. After the wake word, recording shows a
+blue ring with a green segment following the active voice direction. The
+firmware tracks the beam, so there is no host-side polling. Processing is
+amber, audio output is green, and the ring turns off when playback ends or
+a silent capture times out. The plugin uses only the device's `LED_DOA_COLOR`,
+`LED_COLOR`, and `LED_EFFECT` USB controls. It never
 writes `SAVE_CONFIGURATION` or touches the microphone mute GPO. The saved
 idle-off setting therefore remains intact across power cycles.
 

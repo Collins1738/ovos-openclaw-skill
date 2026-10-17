@@ -12,9 +12,10 @@ def test_usb_led_commands_do_not_persist_or_touch_mute():
         led.set_state("speaking")
         led.set_state("idle")
     calls = device.ctrl_transfer.call_args_list
-    assert [call.args[2] for call in calls] == [16, 12, 16, 12, 16, 12, 12]
+    assert [call.args[2] for call in calls] == [17, 12, 16, 12, 16, 12, 12]
     assert [call.args[4] for call in calls] == [
-        b"\xff\x00\x00\x00", b"\x03", b"\x00\xbf\xff\x00", b"\x03",
+        b"\xff\x00\x00\x00\x00\xff\x00\x00", b"\x04",
+        b"\x00\xbf\xff\x00", b"\x03",
         b"\x00\xff\x00\x00", b"\x03", b"\x00",
     ]
     assert all(call.args[3] == 20 for call in calls)

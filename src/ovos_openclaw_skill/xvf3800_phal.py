@@ -14,7 +14,10 @@ VID, PID = 0x2886, 0x001A
 LED_RESID = 20
 LED_EFFECT = 12
 LED_COLOR = 16
-COLORS = {"listening": 0x0000FF, "thinking": 0xFFBF00, "speaking": 0x00FF00}
+LED_DOA_COLOR = 17
+DOA_BASE_COLOR = 0x0000FF
+DOA_DIRECTION_COLOR = 0x00FF00
+COLORS = {"thinking": 0xFFBF00, "speaking": 0x00FF00}
 
 
 class XVF3800LED:
@@ -31,7 +34,7 @@ class XVF3800LED:
         )
 
     def set_state(self, state):
-        if state != "idle" and state not in COLORS:
+        if state not in ("idle", "listening") and state not in COLORS:
             raise ValueError("invalid LED state")
         with self._lock:
             if self._device is None:
@@ -41,6 +44,14 @@ class XVF3800LED:
             try:
                 if state == "idle":
                     self._write(LED_EFFECT, b"\x00")
+                elif state == "listening":
+                    # Firmware tracks the active beam itself; no host polling is needed.
+                    colors = (DOA_BASE_COLOR, DOA_DIRECTION_COLOR)
+                    self._write(
+                        LED_DOA_COLOR,
+                        b"".join(color.to_bytes(4, "little") for color in colors),
+                    )
+                    self._write(LED_EFFECT, b"\x04")
                 else:
                     self._write(LED_COLOR, COLORS[state].to_bytes(4, "little"))
                     self._write(LED_EFFECT, b"\x03")
