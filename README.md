@@ -254,3 +254,23 @@ Non-secret skill settings are optional:
 
 The plugin is published under the current `opm.skill` entry-point group.
 
+
+## ReSpeaker XVF3800 animated LED cues
+
+The optional `xvf3800-led` PHAL plugin uses the 12-pixel ring on the Seeed
+reSpeaker XVF3800 USB 4-Mic Array. It shows the live voice direction over a blue ring while recording,
+a fast amber comet while processing, and a soft green wave during audio output. The ring turns off on playback end or empty speech capture.
+Animations require firmware 2.0.7 or newer (`LED_RING_COLOR`, command 19);
+they were verified on the official USB firmware 2.1.1. The plugin writes only
+volatile `LED_RING_COLOR` and `LED_EFFECT` controls, never
+`SAVE_CONFIGURATION` or microphone mute/GPO controls.
+
+Install this checkout into the OVOS virtualenv, then restart only `ovos-phal`.
+The `opm.phal` entry point is discovered automatically. This plugin applies
+only to USB VID `2886`, PID `001A`; other reSpeaker products need a different
+control path. A missing or unplugged device is logged without crashing PHAL,
+and the next frame retries discovery. Verify `PHAL plugin loaded: xvf3800-led`
+in the PHAL log after restart. To disable it, uninstall this checkout or set
+`PHAL.xvf3800-led.enabled` to `false` in the OVOS configuration and restart
+PHAL. Source protocol: Seeed's `python_control/xvf_host.py` in the
+[reSpeaker XVF3800 USB 4MIC Array repository](https://github.com/respeaker/reSpeaker_XVF3800_USB_4MIC_ARRAY).
