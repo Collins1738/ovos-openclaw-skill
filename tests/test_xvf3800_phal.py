@@ -28,9 +28,23 @@ def test_event_mapping_and_failure_isolation():
     plugin.on_record_end()
     plugin.on_audio_output_start()
     plugin.on_audio_output_end()
+    plugin.on_record_begin()
+    plugin.on_record_end()
+    plugin.on_unknown_speech()
     assert [call.args[0] for call in plugin.led.set_state.call_args_list] == [
         "listening", "thinking", "speaking", "idle",
+        "listening", "thinking", "idle",
     ]
     plugin.led.set_state.side_effect = OSError("private USB error")
     plugin.on_record_begin()
     assert plugin.log.warning.called
+
+
+def test_unknown_speech_event_is_registered():
+    plugin = object.__new__(XVF3800PHAL)
+    plugin._on = Mock()
+    with patch("ovos_openclaw_skill.xvf3800_phal.PHALPlugin.register_core_events"):
+        plugin.register_core_events()
+    plugin._on.assert_called_once_with(
+        "recognizer_loop:speech.recognition.unknown", plugin.on_unknown_speech,
+    )
