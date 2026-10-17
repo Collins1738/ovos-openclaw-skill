@@ -62,23 +62,23 @@ def test_speech_poll_switches_between_direction_and_solid_blue():
          patch("ovos_openclaw_skill.xvf3800_phal.Thread"):
         led.set_state("listening")
     # Status 0, azimuth 90 degrees, then the speech-detected flag.
-    replies = iter([bytes((0, 90, 0, 1, 0)), bytes((0, 90, 0, 0, 0))])
+    replies = iter([bytes((0, 90, 0, vad, 0)) for vad in (1, 0, 1, 0, 0, 0, 0)])
     device.ctrl_transfer.side_effect = lambda request_type, *_args, **_kwargs: (
         next(replies) if request_type & usb.util.CTRL_IN else None
     )
 
-    class TwoPolls:
+    class Polls:
         def __init__(self):
             self.count = 0
 
         def wait(self, _interval):
             self.count += 1
-            return self.count > 2
+            return self.count > 7
 
         def is_set(self):
             return False
 
-    led._poll_listening(TwoPolls())
+    led._poll_listening(Polls())
     effect_writes = [call.args[4] for call in device.ctrl_transfer.call_args_list
                      if call.args[0] & usb.util.CTRL_IN == 0 and call.args[2] == 12]
     assert effect_writes == [b"\x03", b"\x04", b"\x03"]

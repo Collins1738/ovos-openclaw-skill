@@ -58,6 +58,9 @@ class XVF3800LED:
             self._effect = effect
 
     def _poll_listening(self, stop):
+        # A single low VAD sample during speech is common. Flipping effect 4
+        # off on that sample prevents the firmware DoA indicator from settling.
+        quiet_samples = 0
         while not stop.wait(0.08):
             with self._lock:
                 if self._state != "listening" or stop.is_set():
@@ -65,7 +68,13 @@ class XVF3800LED:
                 try:
                     # Firmware DoA mode blanks the whole ring when speech drops.
                     # Solid blue fills that quiet interval until recording ends.
-                    self._set_effect(4 if self._speech_detected() else 3)
+                    if self._speech_detected():
+                        quiet_samples = 0
+                        self._set_effect(4)
+                    else:
+                        quiet_samples += 1
+                        if quiet_samples >= 4:
+                            self._set_effect(3)
                 except Exception as exc:
                     LOG.warning("XVF3800 direction polling stopped: %s", type(exc).__name__)
                     usb.util.dispose_resources(self._device)
