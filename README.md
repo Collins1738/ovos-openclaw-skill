@@ -49,6 +49,18 @@ unrecognized capture. Real speech moves directly to the response without an end
 cue. A blank, beep-only, or timed-out capture closes the conversation. The turn
 limit prevents an accidental endless listening loop.
 
+## Start a fresh voice session
+
+After the wake word, say “start a new conversation” or “start a new session”.
+“Dravon, start a new conversation” also works. The skill replies “Okay, new
+conversation started” and does not send that command to OpenClaw. The next
+spoken request uses a fresh OpenAI `user` value, so it has no prior voice-chat
+context. This resets only the OVOS/OpenClaw voice thread, not the Home or Slack
+conversation. The new value is stored in non-secret skill settings and survives
+an OVOS restart. Each later reset gets another value; old Gateway sessions are
+left intact. The Gateway creates the new session when the next request arrives,
+not when the reset acknowledgement is spoken.
+
 ## Proactive speech
 
 ### Trigger and transport
@@ -226,6 +238,7 @@ Non-secret skill settings are optional:
 | `gateway_url` | `http://127.0.0.1:18789` | Gateway base URL |
 | `model` | `openclaw/default` | OpenAI-compatible model name |
 | `conversation` | `ovos-openclaw-skill` | Stable OpenAI `user` ID |
+| `active_conversation` | unset | Last voice-selected session ID; managed by the spoken reset command |
 | `timeout` | `60` | HTTP timeout in seconds, bounded 1–120 |
 | `max_tokens` | `180` | Completion cap, bounded 16–512 |
 
