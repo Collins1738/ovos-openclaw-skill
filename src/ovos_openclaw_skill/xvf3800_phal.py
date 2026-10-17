@@ -56,6 +56,12 @@ class XVF3800PHAL(PHALPlugin):
         super().__init__(bus=bus, name=name, config=config)
         self._set_state("idle")
 
+    def register_core_events(self):
+        super().register_core_events()
+        # A silent command still emits record_end, but no speech output follows.
+        # The listener reports that path explicitly after the empty transcript.
+        self._on("recognizer_loop:speech.recognition.unknown", self.on_unknown_speech)
+
     def _set_state(self, state):
         try:
             self.led.set_state(state)
@@ -72,6 +78,9 @@ class XVF3800PHAL(PHALPlugin):
         self._set_state("speaking")
 
     def on_audio_output_end(self, message=None):
+        self._set_state("idle")
+
+    def on_unknown_speech(self, message=None):
         self._set_state("idle")
 
     def shutdown(self):
