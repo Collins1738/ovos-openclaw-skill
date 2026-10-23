@@ -15,7 +15,7 @@ OpenClaw automation -> signed local OVOS bus request -> bounded FIFO queue
                     -> Piper announcement -> short follow-up listening window
 ```
 
-The OpenAI-compatible request uses model `openclaw/default`, a concise
+The OpenAI-compatible request uses model `openclaw/main`, a concise
 voice-oriented system message, a bounded completion cap, and a stable `user`
 value (`conversation`) so the Gateway can maintain continuity. The default
 Gateway address is loopback-only: `http://127.0.0.1:18789`.
@@ -232,11 +232,11 @@ Non-secret skill settings are optional:
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `direct_route` | `true` | Consume every post-wake utterance through OpenClaw |
-| `follow_up_enabled` | `true` | Open the microphone after successful answers |
+| `follow_up_enabled` | `true` | Open the microphone after successful answers; unclear requests say “I didn't get that” and exit without listening again |
 | `follow_up_max_turns` | `25` | Maximum no-wake follow-ups, bounded 0–25 |
 | `follow_up_speech_timeout` | `60` | Maximum wait for TTS to finish, bounded 5–120 seconds |
 | `gateway_url` | `http://127.0.0.1:18789` | Gateway base URL |
-| `model` | `openclaw/default` | OpenAI-compatible model name |
+| `model` | `openclaw/main` | OpenAI-compatible model name |
 | `conversation` | `ovos-openclaw-skill` | Stable OpenAI `user` ID |
 | `active_conversation` | unset | Last voice-selected session ID; managed by the spoken reset command |
 | `timeout` | `60` | HTTP timeout in seconds, bounded 1–120 |
