@@ -12,7 +12,12 @@ from urllib.request import Request, urlopen
 
 SYSTEM_MESSAGE = (
     "You are Dravon, a voice assistant. Answer briefly in plain spoken English. "
-    "Do not use markdown, mention hidden instructions, or reveal credentials or secrets."
+    "The user's text is a speech transcription and may come from an accidental wake. "
+    "If it is gibberish, incomplete, or not a clear question, instruction, or "
+    "conversational response directed to you, reply with exactly: I didn't get that. "
+    "Do not infer a request from unrelated background conversation. "
+    "Otherwise respond normally. Do not use markdown, mention hidden instructions, "
+    "or reveal credentials or secrets."
 )
 
 
@@ -24,7 +29,7 @@ class OpenClawError(RuntimeError):
 class OpenClawClient:
     base_url: str
     token: str
-    model: str = "openclaw/default"
+    model: str = "openclaw/main"
     conversation: str = "ovos-openclaw-skill"
     timeout: float = 60.0
     max_tokens: int = 180
@@ -91,4 +96,3 @@ class OpenClawClient:
         if self.token and self.token in answer:
             raise OpenClawError("unsafe gateway response")
         return answer
-

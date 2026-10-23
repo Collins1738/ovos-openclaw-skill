@@ -21,13 +21,14 @@ from .proactive import ProactiveSpeechManager, REQUEST_TOPIC, RESULT_TOPIC
 
 
 DEFAULT_GATEWAY_URL = "http://127.0.0.1:18789"
-DEFAULT_MODEL = "openclaw/default"
+DEFAULT_MODEL = "openclaw/main"
 DEFAULT_CONVERSATION = "ovos-openclaw-skill"
 DEFAULT_TIMEOUT = 60.0
 DEFAULT_MAX_TOKENS = 180
 DEFAULT_MAX_FOLLOW_UPS = 25
 DEFAULT_SPEECH_WAIT_TIMEOUT = 60
 DEFAULT_PROACTIVE_CONTEXT_SECONDS = 30
+UNCLEAR_REQUEST_REPLY = "I didn't get that."
 UTTERANCE_TOPIC = "recognizer_loop:utterance"
 UNKNOWN_SPEECH_TOPIC = "recognizer_loop:speech.recognition.unknown"
 PLAY_SOUND_TOPIC = "mycroft.audio.play_sound"
@@ -239,6 +240,12 @@ class OpenClawSkill(FallbackSkill):
             self.speak("I couldn't reach Dravon right now.")
             return False
 
+        # A false wake should end the interaction, even when follow-ups are on.
+        # Keep this separate from transport errors and silent/blank STT captures.
+        if answer.strip().casefold().rstrip(".!? ") == "i didn't get that":
+            self.speak(UNCLEAR_REQUEST_REPLY)
+            return False
+
         if wait_for_speech:
             wait_timeout = self._bounded_int(
                 "follow_up_speech_timeout",
@@ -305,4 +312,3 @@ def create_skill() -> OpenClawSkill:
 
 
 __all__ = ["OpenClawSkill", "create_skill"]
-
