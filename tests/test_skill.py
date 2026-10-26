@@ -143,6 +143,43 @@ def test_follow_up_mode_stops_silently_on_blank_audio(monkeypatch):
     skill.speak.assert_called_once_with("First answer.", wait=60)
 
 
+@pytest.mark.parametrize("reply", ["I didn't get that.", "i didn't get that!"])
+def test_unclear_initial_request_speaks_once_without_follow_up(monkeypatch, reply):
+    skill = bare_skill()
+    skill._settings.update({"follow_up_enabled": True})
+    client = Mock()
+    client.complete.return_value = reply
+    skill._make_client = Mock(return_value=client)
+    skill.get_response = Mock()
+    monkeypatch.setattr("ovos_openclaw_skill.get_gateway_token", lambda: "token")
+
+    skill.handle_direct_request(
+        SimpleNamespace(data={"utterance": "Court right now there is world religions"})
+    )
+
+    client.complete.assert_called_once()
+    skill.speak.assert_called_once_with("I didn't get that.")
+    skill.get_response.assert_not_called()
+
+
+def test_unclear_follow_up_ends_conversation_without_listening_again(monkeypatch):
+    skill = bare_skill()
+    skill._settings.update({"follow_up_enabled": True})
+    client = Mock()
+    client.complete.side_effect = ["First answer.", "I didn't get that."]
+    skill._make_client = Mock(return_value=client)
+    skill.get_response = Mock(return_value="some incoherent follow-up")
+    monkeypatch.setattr("ovos_openclaw_skill.get_gateway_token", lambda: "token")
+
+    skill.handle_direct_request(SimpleNamespace(data={"utterance": "what time is it"}))
+
+    assert skill.speak.call_args_list == [
+        call("First answer.", wait=60),
+        call("I didn't get that."),
+    ]
+    skill.get_response.assert_called_once()
+
+
 def test_follow_up_mode_enforces_turn_limit(monkeypatch):
     skill = bare_skill()
     skill._settings.update(

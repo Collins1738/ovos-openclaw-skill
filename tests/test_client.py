@@ -38,9 +38,11 @@ def test_completion_posts_openai_payload(monkeypatch):
     body = json.loads(request.data)
     assert request.full_url == "http://127.0.0.1:18789/v1/chat/completions"
     assert request.headers["Authorization"] == "Bearer secret-value"
-    assert body["model"] == "openclaw/default"
+    assert body["model"] == "openclaw/main"
     assert body["user"] == "living-room"
     assert body["max_tokens"] == 90
+    assert "accidental wake" in body["messages"][0]["content"]
+    assert "I didn't get that." in body["messages"][0]["content"]
     assert body["messages"][-1] == {"role": "user", "content": "what time is it"}
     assert observed["timeout"] == 60.0
 
@@ -77,4 +79,3 @@ def test_token_echo_is_rejected(monkeypatch):
     )
     with pytest.raises(OpenClawError, match="unsafe"):
         OpenClawClient("http://127.0.0.1:18789", "secret-value").complete("hello")
-
