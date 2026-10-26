@@ -6,14 +6,22 @@ Gateway. It targets `ovos-workshop` 9.8.x and `ovos-core` 3.7.x.
 ## Architecture
 
 ```text
-wake word -> local STT -> high-priority OpenClaw fallback -> OVOS skill
+wake word -> ElevenLabs Scribe STT (Whisper.cpp fallback)
+          -> high-priority OpenClaw fallback -> OVOS skill
           -> token lookup -> HTTP POST /v1/chat/completions
-          -> local OpenClaw Gateway -> short spoken response
+          -> local OpenClaw Gateway -> ElevenLabs v4 TTS (Piper fallback)
           -> listening cue -> bounded no-wake follow-up turns
 
 OpenClaw automation -> signed local OVOS bus request -> bounded FIFO queue
-                    -> Piper announcement -> short follow-up listening window
+                    -> ElevenLabs v4 TTS (Piper fallback)
+                    -> short follow-up listening window
 ```
+
+On Collins's current Mac, `mycroft.conf` selects `ovos-stt-plugin-elevenlabs`
+(Scribe) and `ovos-tts-plugin-elevenlabs-v4` as the primary providers.
+`ovos-stt-plugin-whispercpp` and `ovos-tts-plugin-piper` remain configured
+as their respective fallbacks. OVOS chooses the provider for both normal
+replies and proactive announcements; this skill does not select it.
 
 The OpenAI-compatible request uses model `openclaw/main`, a concise
 voice-oriented system message, a bounded completion cap, and a stable `user`
@@ -43,8 +51,8 @@ Follow-up mode is also enabled by default. After each successful response, the
 skill waits for TTS to finish and asks OVOS response mode to open the microphone.
 The packaged `start_listening_safe.wav` keeps the normal start beep and adds
 750 ms of trailing silence. Dinkum remains in confirmation mode for the full
-file, preventing the speaker cue from entering Whisper's command buffer. A
-short descending cue plays only when OVOS receives silence, blank audio, or an
+file, preventing the speaker cue from being captured as speech by the
+active STT provider. A short descending cue plays only when OVOS receives silence, blank audio, or an
 unrecognized capture. Real speech moves directly to the response without an end
 cue. A blank, beep-only, or timed-out capture closes the conversation. The turn
 limit prevents an accidental endless listening loop.
@@ -86,7 +94,7 @@ one at a time with `expect_response=true`.
 ```text
 local trigger -> ovos-openclaw-speak -> signed OVOS bus message
               -> 127.0.0.1:8181/core -> verified FIFO queue
-              -> Piper speech -> response-mode microphone
+              -> configured OVOS TTS -> response-mode microphone
 ```
 
 The initial announcement does not use the OpenClaw Gateway HTTP route. The
